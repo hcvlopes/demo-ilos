@@ -108,11 +108,29 @@ docs/          — Decisões, progresso, ontologia
 | `FALKORDB_GRAPH` | `demo_ilos` | Nome do grafo |
 | `OLLAMA_HOST` | `http://localhost:11434` | URL do servidor Ollama |
 | `OLLAMA_MODEL` | `llama3.1` | Modelo LLM a usar (precisa estar baixado) |
-| `PYTHON` | `python3` (ou `python`) | Interpretador usado pelo Makefile |
+| `PYTHON` | primeiro 3.11+ do PATH | Interpretador usado pelo Makefile |
 
-O Makefile procura `python3` e cai para `python` — o macOS não tem `python`.
-Para apontar um interpretador específico (venv, pyenv):
-`make test PYTHON=.venv/bin/python`
+### Python no macOS
+
+O projeto exige **Python 3.11+**. O `python3` que vem no macOS é o 3.9 do
+Command Line Tools, que não entende a sintaxe `X | None` usada nos modelos
+Pydantic — daí o `TypeError: unsupported operand type(s) for |`.
+
+O Makefile procura sozinho o primeiro interpretador 3.11+ (`python3` primeiro,
+porque é onde as dependências normalmente estão; depois `python3.13`,
+`python3.12`, `python3.11`). Se não achar nenhum, ou se as dependências
+faltarem, ele diz o que fazer em vez de estourar um traceback.
+
+Setup recomendado no macOS:
+
+```bash
+brew install python@3.12
+python3.12 -m venv .venv
+.venv/bin/pip install -e .
+make test PYTHON=.venv/bin/python
+```
+
+Com o venv ativado (`source .venv/bin/activate`) o `PYTHON=` é dispensável.
 
 ## Licença
 

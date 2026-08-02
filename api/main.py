@@ -14,7 +14,6 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from ollama import Client as OllamaClient
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -49,20 +48,24 @@ class SaudeResponse(BaseModel):
 
 
 _driver = None
-_ollama_client = None
+_llm_client = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _driver, _ollama_client
+    global _driver, _llm_client
 
     try:
         _driver = create_driver()
     except Exception:
         _driver = None
 
-    host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-    _ollama_client = OllamaClient(host=host)
+    try:
+        from ollama import Client as OllamaClient
+        host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+        _llm_client = OllamaClient(host=host)
+    except Exception:
+        _llm_client = None
 
     yield
 
@@ -91,7 +94,7 @@ def pergunta(req: PerguntaRequest):
 
     try:
         classificacao = classificar_intencao(
-            req.pergunta, client=_ollama_client, modelo=modelo,
+            req.pergunta, client=_llm_client, modelo=modelo,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Erro na classificacao: {e}")

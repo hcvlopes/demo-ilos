@@ -15,7 +15,8 @@ from __future__ import annotations
 import json
 import os
 
-from ollama import Client as OllamaClient
+import re
+
 from pydantic import BaseModel
 
 from intents.base import EnvelopeEvidencia
@@ -70,39 +71,82 @@ def _construir_prompt_sistema() -> str:
     return "\n".join(linhas)
 
 
+_REGRAS_FALLBACK = [
+    (r"expli(?:que|car)\b.*\bprocesso\b", "explicar_processo", "processo_id"),
+    (r"expli(?:que|car)\b.*\bdefeito\b", "explicar_defeito", "defeito_id"),
+    (r"equipamentos?\b.*\bativo\b|listar?\b.*\bequipamentos?\b", "listar_equipamentos_ativo", "ativo_id"),
+    (r"resumo\b.*\bsistema\b|sistema\b.*\bresumo\b", "resumo_sistema", "sistema_id"),
+    (r"resumo\b.*\bedifica|edifica.*\bresumo\b", "resumo_edificacao", "edificacao_id"),
+    (r"depend[eê]ncia|upstream|downstream", "dependencias_ativo", "ativo_id"),
+    (r"defeitos?\s+(aberto|pendente)|aberto.*defeito|quais\s+defeitos|defeitos\s+est[aã]o", "defeitos_abertos", None),
+    (r"ord(?:em|ens)\s+(?:de\s+)?manuten[çc][aã]o", "ordens_manutencao", "equipamento_id"),
+    (r"norma|regulament|requisito", "normas_aplicaveis", "equipamento_id"),
+    (r"monitor|sensor|medi[çc][aã]o|condi[çc][aã]o", "monitoramento_equipamento", "equipamento_id"),
+    (r"cadeia\b.*\bfalha|falha.*\bcadeia|modo.*causa.*mecanismo", "cadeia_falha", "defeito_id"),
+    (r"estat[ií]stica|lambda|confiabilidade.*classe|classe.*confiabilidade", "estatisticas_classe", "classe_id"),
+    (r"impacto.*parada|parada.*impacto|redundância|redund[aâ]ncia", "impacto_parada", "ativo_id"),
+    (r"plano.*manuten|manuten.*plano", "plano_manutencao_ativo", "ativo_id"),
+    (r"a[çc][oõ]es?\s+permitid|pode\s+fazer|autoriza", "acoes_permitidas", "equipamento_id"),
+    (r"hist[oó]rico|eventos?\s+de\s+falha|timeline", "historico_equipamento", "equipamento_id"),
+    (r"risco|ranking|escore", "ativos_em_risco_por_processo", "processo_id"),
+]
+
+_ID_PATTERN = re.compile(r"\b([A-Z]{1,5}(?:-[A-Z0-9]{1,5}){1,3})\b")
+
+
+def _classificar_fallback(pergunta: str) -> ClassificacaoIntencao:
+    """Classificador por regex — fallback quando LLM nao esta disponivel."""
+    texto = pergunta.lower()
+    for pattern, intencao, param_key in _REGRAS_FALLBACK:
+        if re.search(pattern, texto):
+            parametros = {}
+            if param_key:
+                match = _ID_PATTERN.search(pergunta)
+                if match:
+                    parametros[param_key] = match.group(1)
+                else:
+                    parametros[param_key] = ""
+            return ClassificacaoIntencao(intencao=intencao, parametros=parametros)
+    return ClassificacaoIntencao(intencao="desconhecida", parametros={})
+
+
 def classificar_intencao(
     pergunta: str,
-    client: OllamaClient | None = None,
+    client=None,
     modelo: str | None = None,
 ) -> ClassificacaoIntencao:
-    """Classifica a intencao via LLM local (Ollama)."""
-    if client is None:
-        host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-        client = OllamaClient(host=host)
-
+    """Classifica a intencao via LLM (Ollama) com fallback regex."""
     if modelo is None:
         modelo = os.environ.get("OLLAMA_MODEL", "llama3.1")
 
-    response = client.chat(
-        model=modelo,
-        messages=[
-            {"role": "system", "content": _construir_prompt_sistema()},
-            {"role": "user", "content": pergunta},
-        ],
-        format="json",
-    )
+    try:
+        from ollama import Client as OllamaClient
+        if client is None:
+            host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+            client = OllamaClient(host=host)
 
-    texto = response["message"]["content"].strip()
+        response = client.chat(
+            model=modelo,
+            messages=[
+                {"role": "system", "content": _construir_prompt_sistema()},
+                {"role": "user", "content": pergunta},
+            ],
+            format="json",
+        )
 
-    if texto.startswith("```"):
-        linhas = texto.split("\n")
-        texto = "\n".join(linhas[1:-1])
+        texto = response["message"]["content"].strip()
 
-    dados = json.loads(texto)
-    return ClassificacaoIntencao(
-        intencao=dados.get("intencao", "desconhecida"),
-        parametros=dados.get("parametros", {}),
-    )
+        if texto.startswith("```"):
+            linhas = texto.split("\n")
+            texto = "\n".join(linhas[1:-1])
+
+        dados = json.loads(texto)
+        return ClassificacaoIntencao(
+            intencao=dados.get("intencao", "desconhecida"),
+            parametros=dados.get("parametros", {}),
+        )
+    except Exception:
+        return _classificar_fallback(pergunta)
 
 
 def executar_intencao(

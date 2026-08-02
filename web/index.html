@@ -127,27 +127,33 @@ header .badge {
 /* Exemplos clicaveis, agrupados por tipo de pergunta. Agrupar importa: sao
    27 intencoes, e uma lista corrida nao deixa ver que tipos de pergunta o
    grafo responde. */
-.exemplos { align-self: stretch; max-width: 100%; }
+.exemplos { max-width: 100%; }
 
-.exemplo-grupo { margin-bottom: 12px; }
+.exemplo-grupo { margin-bottom: 18px; }
 
 .exemplo-grupo-titulo {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.exemplo-grupo-nota {
+  font-size: 11px;
   color: var(--text-muted);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .exemplo-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .chip-exemplo {
   font: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.3;
   text-align: left;
-  padding: 6px 10px;
+  padding: 7px 12px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface);
@@ -207,14 +213,43 @@ header .badge {
 .chat-input button:hover { background: var(--primary-hover); }
 .chat-input button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.evidence-empty {
+/* Catalogo de exemplos: ocupa o painel de evidencia enquanto ele esta vazio.
+   Na abertura o lado direito nao tem nada a mostrar, e essa e a hora em que o
+   operador da demo mais precisa ver o repertorio inteiro de uma vez. */
+.catalogo-intro {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.catalogo-intro strong { color: var(--text); }
+
+.painel-evidencia-header {
   display: flex;
   align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--text-muted);
-  font-size: 14px;
+  justify-content: space-between;
+  gap: 12px;
 }
+
+.btn-exemplos {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--primary);
+  cursor: pointer;
+}
+
+.btn-exemplos:hover { border-color: var(--primary); background: #eff6ff; }
+.btn-exemplos:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 .section {
   margin-bottom: 16px;
@@ -377,9 +412,8 @@ table th {
       <div class="chat-messages" id="messages">
         <div class="msg msg-system">
           Faca uma pergunta sobre ativos, defeitos, normas ou processos.
-          Clique num exemplo ou escreva a sua.
+          Escolha um exemplo ao lado ou escreva a sua.
         </div>
-        <div class="exemplos" id="exemplos"></div>
       </div>
     </div>
     <div class="chat-input">
@@ -389,10 +423,17 @@ table th {
   </div>
 
   <div class="panel">
-    <div class="panel-header">Evidencia</div>
+    <div class="panel-header painel-evidencia-header">
+      <span id="titulo-evidencia">Evidencia</span>
+      <button type="button" id="btn-exemplos" class="btn-exemplos" hidden>Ver exemplos</button>
+    </div>
     <div class="panel-body" id="evidence-panel">
-      <div class="evidence-empty" id="evidence-empty">
-        Faca uma pergunta para ver a evidencia aqui.
+      <div id="evidence-empty">
+        <div class="catalogo-intro">
+          <strong id="catalogo-total">Exemplos de pergunta</strong>
+          — clique para executar. A evidencia aparece aqui no lugar.
+        </div>
+        <div class="exemplos" id="exemplos"></div>
       </div>
       <div id="evidence-content" style="display:none;"></div>
     </div>
@@ -494,8 +535,7 @@ function escapeHtml(s) {
 }
 
 function renderEvidence(data) {
-  evidenceEmpty.style.display = 'none';
-  evidenceContent.style.display = 'block';
+  mostrarEvidencia();
 
   const env = data.envelope;
   let html = '';
@@ -658,20 +698,28 @@ function layoutNodes(nos, W, H, R) {
 const GRUPOS_EXEMPLO = [
   {
     titulo: 'Norma e autorizacao',
+    nota: 'O que o grafo declara e um dashboard nao',
     tese: true,
     perguntas: [
       'Quais equipamentos estao sujeitos a NR-12?',
+      'O que a NBR 5410 exige?',
+      'O que a ISO 14224 exige?',
       'Quais requisitos incidem sobre o EQ-MOE-001?',
+      'Quais normas se aplicam ao EQ-TRE-001?',
       'O que um tecnico pode fazer?',
+      'O que o engenheiro pode executar?',
       'Quais acoes sao permitidas para o defeito DEF-001?',
     ],
   },
   {
-    titulo: 'Falha',
+    titulo: 'Defeito e cadeia de falha',
     perguntas: [
       'Explique o defeito DEF-001',
+      'Explique o defeito DEF-101',
       'Mostre a cadeia de falha do DEF-901',
+      'Mostre a cadeia de falha do DEF-911',
       'Qual a peca afetada pelo DEF-001?',
+      'Onde esta o defeito DEF-002?',
       'Quais defeitos estao abertos?',
       'Quais defeitos ja foram resolvidos?',
     ],
@@ -680,25 +728,48 @@ const GRUPOS_EXEMPLO = [
     titulo: 'Impacto e risco',
     perguntas: [
       'Qual o impacto de parada do ATV-PRT-01?',
+      'O que acontece se o ATV-ARM-01 parar?',
       'Quais ativos estao em risco no processo PO-001?',
+      'Quais ativos estao em risco no processo PO-002?',
       'Qual o pior sistema em confiabilidade?',
+      'Compare os sistemas por taxa de falha',
       'Quais as dependencias do ATV-PRT-01?',
+      'Do que depende o ATV-EXP-01?',
+    ],
+  },
+  {
+    titulo: 'Confiabilidade',
+    perguntas: [
+      'Qual a taxa de falha da classe CT-BCC?',
+      'Estatisticas da classe CT-MOE',
+      'Qual o historico do EQ-TRE-001?',
+      'O EQ-TRF-101 ja falhou antes?',
+      'Qual o monitoramento do EQ-TRE-001?',
+      'Mostre a tendencia do sensor no EQ-TRE-001',
     ],
   },
   {
     titulo: 'Manutencao',
     perguntas: [
       'Qual o plano de manutencao do ATV-PRT-01?',
+      'Que lista de tarefa cobre o ATV-ARM-01?',
+      'Quais ordens de manutencao do EQ-TRE-001?',
       'Quais as etapas da ordem OM-DEF-901?',
+      'Quem executa a OM-DEF-911?',
       'Qual a consequencia das notas do EQ-TRE-001?',
-      'Qual o historico do EQ-TRE-001?',
+      'Qual a severidade das notas do EQ-TRF-101?',
     ],
   },
   {
     titulo: 'Planta e organizacao',
     perguntas: [
       'Resumo do sistema SIS-PRT',
+      'Resumo do sistema SIS-TRN',
+      'Resumo da edificacao EDIF-001',
       'Liste os equipamentos do ATV-PRT-01',
+      'Que equipamentos compoe o ativo ATV-TRN-01?',
+      'Explique o processo PO-001',
+      'Que indicador mede o PO-002?',
       'Qual a carga do centro de manutencao CT-MNT-001?',
       'O que o planejamento central cobre?',
     ],
@@ -708,6 +779,8 @@ const GRUPOS_EXEMPLO = [
 function montarExemplos() {
   const container = document.getElementById('exemplos');
   if (!container) return;
+  let total = 0;
+
   for (const grupo of GRUPOS_EXEMPLO) {
     const bloco = document.createElement('div');
     bloco.className = 'exemplo-grupo' + (grupo.tese ? ' tese' : '');
@@ -717,9 +790,17 @@ function montarExemplos() {
     titulo.textContent = grupo.titulo;
     bloco.appendChild(titulo);
 
+    if (grupo.nota) {
+      const nota = document.createElement('div');
+      nota.className = 'exemplo-grupo-nota';
+      nota.textContent = grupo.nota;
+      bloco.appendChild(nota);
+    }
+
     const chips = document.createElement('div');
     chips.className = 'exemplo-chips';
     for (const pergunta of grupo.perguntas) {
+      total++;
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'chip-exemplo';
@@ -733,11 +814,34 @@ function montarExemplos() {
     bloco.appendChild(chips);
     container.appendChild(bloco);
   }
+
+  const rotulo = document.getElementById('catalogo-total');
+  if (rotulo) rotulo.textContent = `${total} exemplos de pergunta`;
 }
+
+// O catalogo e a evidencia dividem o mesmo painel: um substitui o outro.
+function mostrarCatalogo() {
+  evidenceEmpty.style.display = 'block';
+  evidenceContent.style.display = 'none';
+  document.getElementById('titulo-evidencia').textContent = 'Exemplos';
+  document.getElementById('btn-exemplos').hidden = true;
+}
+
+function mostrarEvidencia() {
+  evidenceEmpty.style.display = 'none';
+  evidenceContent.style.display = 'block';
+  document.getElementById('titulo-evidencia').textContent = 'Evidencia';
+  // Depois da primeira pergunta o catalogo sai de vista. Numa demo ao vivo
+  // voltar a ele precisa ser um clique, nao um reload.
+  document.getElementById('btn-exemplos').hidden = false;
+}
+
+document.getElementById('btn-exemplos').addEventListener('click', mostrarCatalogo);
 
 carregarIntencoes();
 carregarSaude();
 montarExemplos();
+mostrarCatalogo();
 </script>
 
 </body>

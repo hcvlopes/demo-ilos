@@ -108,3 +108,59 @@ class TestAPIEndpointsParaUI:
         assert resp.status_code == 200
         data = resp.json()
         assert "intencoes" in data
+
+
+class TestCatalogoDeExemplos:
+    """O catalogo da UI e a porta de entrada da demo.
+
+    Duas garantias: nenhum exemplo mostrado pode falhar na classificacao, e
+    nenhuma intencao pode ficar sem exemplo. A segunda e a que importa no
+    longo prazo — intencao nova sem exemplo e intencao que ninguem descobre
+    que existe.
+    """
+
+    @staticmethod
+    def _perguntas() -> list[str]:
+        html = (Path(__file__).resolve().parent.parent / "web" / "index.html").read_text(
+            encoding="utf-8",
+        )
+        inicio = html.index("const GRUPOS_EXEMPLO")
+        bloco = html[inicio:html.index("\n];\n", inicio)]
+        return re.findall(r"^      '(.+?)',$", bloco, re.M)
+
+    def test_catalogo_nao_esta_vazio(self):
+        assert len(self._perguntas()) >= 30
+
+    def test_nenhum_exemplo_cai_em_desconhecida(self):
+        """Exemplo mostrado na tela nao pode devolver 422 ao ser clicado."""
+        from api.orquestrador import _classificar_fallback
+
+        falhas = [
+            p for p in self._perguntas()
+            if _classificar_fallback(p).intencao == "desconhecida"
+        ]
+        assert not falhas, f"Exemplos que o classificador nao reconhece: {falhas}"
+
+    def test_toda_intencao_tem_exemplo(self):
+        from api.orquestrador import _classificar_fallback
+        from intents.registry import REGISTRY
+
+        alcancadas = {_classificar_fallback(p).intencao for p in self._perguntas()}
+        faltando = sorted(set(REGISTRY) - alcancadas)
+        assert not faltando, (
+            f"Intencoes sem exemplo no catalogo da UI: {faltando}"
+        )
+
+    def test_parametros_dos_exemplos_sao_tipaveis(self):
+        """Clicar num exemplo nao pode gerar ValidationError."""
+        import inspect
+
+        from api.orquestrador import _classificar_fallback
+        from intents.registry import get_intencao
+
+        for pergunta in self._perguntas():
+            c = _classificar_fallback(pergunta)
+            inst = get_intencao(c.intencao)
+            sig = inspect.signature(type(inst).executar)
+            tipo = list(sig.parameters.values())[2].annotation
+            tipo(**c.parametros)

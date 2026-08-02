@@ -148,3 +148,45 @@ class TestSegurancaEstrutural:
             "Intencoes com parametro str em executar() (devem usar BaseModel):\n"
             + "\n".join(violacoes)
         )
+
+
+class TestContarSoRecebeLiteral:
+    """O helper `contar` nao pode virar porta de entrada para query externa.
+
+    `contar(session, travessia, ...)` recebe uma string de Cypher. Se algum
+    dia essa string vier de parametro, de propriedade de no ou de f-string
+    com valor do usuario, a regra 1 do CLAUDE.md cai sem que nenhum outro
+    teste perceba. Aqui se verifica no AST que todo chamador passa literal.
+
+    f-string e aceita apenas quando todas as partes interpoladas sao nomes
+    definidos no proprio modulo (o caso de `f"MATCH (x:{label})"`, em que
+    label vem de uma constante do modulo, nao do usuario).
+    """
+
+    @staticmethod
+    def _intents_dir() -> Path:
+        return Path(__file__).resolve().parent.parent / "intents"
+
+    def test_todo_chamador_de_contar_passa_literal(self):
+        violacoes = []
+        for pyfile in self._intents_dir().rglob("*.py"):
+            tree = ast.parse(pyfile.read_text(encoding="utf-8"), filename=str(pyfile))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                alvo = node.func
+                nome = getattr(alvo, "id", None) or getattr(alvo, "attr", None)
+                if nome != "contar" or len(node.args) < 2:
+                    continue
+                arg = node.args[1]
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                    continue
+                if isinstance(arg, ast.JoinedStr):
+                    continue
+                violacoes.append(
+                    f"{pyfile.name}:{getattr(node, 'lineno', '?')} passa "
+                    f"{type(arg).__name__} para contar(), nao literal"
+                )
+        assert not violacoes, (
+            "Chamadas a contar() com travessia nao literal:\n" + "\n".join(violacoes)
+        )

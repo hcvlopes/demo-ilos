@@ -12,6 +12,7 @@ from collections import defaultdict
 
 import numpy as np
 from db.adapter import create_driver
+from seed import comum
 from seed.generator.estimador import estimar_lambda
 from seed.generator.fixtures_loader import (
     carregar_acoes_permitidas,
@@ -20,6 +21,7 @@ from seed.generator.fixtures_loader import (
     carregar_lambda_verdadeiro,
     carregar_mecanismos_falha,
     carregar_modos_falha,
+    carregar_normas,
 )
 from seed.generator.poisson import PERFIL_SAFRA_AGRO, gerar_historico
 
@@ -197,6 +199,30 @@ DEFEITOS = [
 ]
 
 PROTAGONISTA_ID = "DEF-001"
+
+# Defeitos ja encerrados, com cadeia de falha completa. Existem para que
+# `cadeia_falha` tenha o que mostrar: os defeitos abertos acima nao tem
+# evento, nota nem acao tomada, o que esta certo mas nao demonstra nada.
+DEFEITOS_RESOLVIDOS = [
+    {
+        "id": "DEF-901",
+        "descricao": "Vibracao em mancal de acionamento",
+        "equipamento": "EQ-TRE-002",
+        "modo": "VIB", "causa": "AGE", "mecanismo": "WEA",
+        "horas_deteccao": 8200, "horas_encerramento": 8460, "ano": 2,
+        "acao_tomada": "Substituicao de rolamento e realinhamento",
+        "horas_execucao": 6.5,
+    },
+    {
+        "id": "DEF-902",
+        "descricao": "Vazamento externo em valvula de controle",
+        "equipamento": "EQ-VCT-002",
+        "modo": "ELP", "causa": "AGE", "mecanismo": "LEA",
+        "horas_deteccao": 7100, "horas_encerramento": 7180, "ano": 2,
+        "acao_tomada": "Troca de vedacao e teste de estanqueidade",
+        "horas_execucao": 3.0,
+    },
+]
 
 # ---------------------------------------------------------------------------
 # Monitoramento de condição — protagonista com tendência crescente
@@ -379,11 +405,8 @@ def _criar_normas_e_organizacao(session) -> None:
         GRUPO_PLANEJAMENTO,
     )
 
-    # ClasseTaxonomia REGULADO_POR ISO 14224
-    session.run(
-        "MATCH (ct:ClasseTaxonomia), (n:Norma {id: 'NORMA-ISO14224'}) "
-        "MERGE (ct)-[:REGULADO_POR]->(n)",
-    )
+    # A ligacao ClasseTaxonomia-REGULADO_POR->Norma nao pode ficar aqui: esta
+    # funcao roda antes da taxonomia existir. Ver comum.ligar_organizacao().
 
 
 def _gerar_e_criar_eventos(
@@ -851,6 +874,40 @@ def seed() -> None:
 
             print("12. Criando catalogo de acoes permitidas e papeis...")
             _criar_catalogo_acoes_permitidas(session, modos)
+
+            print("13. Criando requisitos normativos...")
+            n_req = comum.criar_normas_e_requisitos(session, carregar_normas())
+            print(f"  {n_req} requisitos criados.")
+
+            print("14. Criando planos de manutencao e listas de tarefa...")
+            n_pm = comum.criar_planos_manutencao(session)
+            print(f"  {n_pm} planos criados.")
+
+            print("15. Criando indicadores de processo...")
+            n_ind = comum.criar_indicadores(session)
+            print(f"  {n_ind} indicadores criados.")
+
+            # Precisa vir ANTES das funcoes derivadas (partes, etapas): elas
+            # olham defeitos e ordens existentes, e rodar depois faria a
+            # primeira passada divergir da segunda.
+            print("16. Criando defeitos resolvidos com cadeia completa...")
+            n_res = comum.criar_defeitos_resolvidos(session, DEFEITOS_RESOLVIDOS)
+            print(f"  {n_res} defeitos resolvidos criados.")
+
+            print("17. Criando partes de objeto e localizando defeitos...")
+            n_po = comum.criar_partes_objeto(session)
+            print(f"  {n_po} localizacoes de defeito criadas.")
+
+            print("18. Criando consequencias de nota...")
+            n_cns = comum.criar_consequencias_nota(session)
+            print(f"  {n_cns} notas atreladas a consequencia.")
+
+            print("19. Criando etapas das ordens corretivas...")
+            n_etp = comum.criar_etapas_das_ordens(session)
+            print(f"  {n_etp} etapas criadas.")
+
+            print("20. Ligando organizacao (centro de trabalho, planejamento)...")
+            comum.ligar_organizacao(session)
 
         print("=== Seeder Agro concluido com sucesso ===")
     finally:

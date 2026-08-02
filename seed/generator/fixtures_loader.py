@@ -51,3 +51,13 @@ def carregar_acoes_permitidas() -> list[dict]:
     path = FIXTURES_DIR / "iso14224" / "acoes_permitidas.yaml"
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     return data
+
+
+def carregar_normas() -> list[dict]:
+    """Retorna normas com seus requisitos aninhados.
+
+    Os requisitos sao registros sinteticos — ver cabecalho de normas.yaml.
+    """
+    path = FIXTURES_DIR / "normas.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return data.get("normas") or []

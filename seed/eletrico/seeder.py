@@ -16,6 +16,7 @@ from collections import defaultdict
 
 import numpy as np
 from db.adapter import create_driver
+from seed import comum
 from seed.generator.estimador import estimar_lambda
 from seed.generator.fixtures_loader import (
     carregar_acoes_permitidas,
@@ -24,6 +25,7 @@ from seed.generator.fixtures_loader import (
     carregar_lambda_verdadeiro,
     carregar_mecanismos_falha,
     carregar_modos_falha,
+    carregar_normas,
 )
 from seed.generator.poisson import PERFIL_UNIFORME, gerar_historico
 
@@ -172,6 +174,30 @@ DEFEITOS = [
     },
 ]
 
+# Defeitos ja encerrados, com cadeia de falha completa. Os defeitos abertos
+# acima nao tem evento, nota nem acao tomada — correto do ponto de vista
+# semantico, mas deixa `cadeia_falha` sem nada para mostrar.
+DEFEITOS_RESOLVIDOS = [
+    {
+        "id": "DEF-911",
+        "descricao": "Falha de atuacao em disjuntor de bay",
+        "equipamento": "EQ-DJT-102",
+        "modo": "FTO", "causa": "MNT", "mecanismo": "STK",
+        "horas_deteccao": 12400, "horas_encerramento": 12470, "ano": 2,
+        "acao_tomada": "Revisao do mecanismo de operacao e lubrificacao",
+        "horas_execucao": 5.0,
+    },
+    {
+        "id": "DEF-912",
+        "descricao": "Curto entre espiras em enrolamento",
+        "equipamento": "EQ-TRF-102",
+        "modo": "SHC", "causa": "AGE", "mecanismo": "SHC",
+        "horas_deteccao": 15800, "horas_encerramento": 16040, "ano": 2,
+        "acao_tomada": "Rebobinamento e ensaio de isolacao",
+        "horas_execucao": 48.0,
+    },
+]
+
 
 def _equipamentos_por_classe() -> dict[str, list[dict]]:
     por_classe: dict[str, list[dict]] = defaultdict(list)
@@ -261,9 +287,8 @@ def _criar_normas_e_organizacao(session) -> None:
         session.run("MERGE (f:Fabricante {id: $id}) SET f.nome = $nome, f.pais = $pais", f)
     session.run("MERGE (ct:CentroTrabalho {id: $id}) SET ct.descricao = $descricao", CENTRO_TRABALHO)
     session.run("MERGE (eq:Equipe {id: $id}) SET eq.descricao = $descricao", EQUIPE)
-    session.run(
-        "MATCH (ct:ClasseTaxonomia), (n:Norma {id: 'NORMA-ISO14224'}) MERGE (ct)-[:REGULADO_POR]->(n)",
-    )
+    # A ligacao ClasseTaxonomia-REGULADO_POR->Norma roda em
+    # comum.ligar_organizacao(), depois que a taxonomia existe.
 
 
 def _gerar_e_criar_eventos(session, lambdas, modos, causas, mecanismos, rng) -> dict[str, list]:
@@ -518,6 +543,40 @@ def seed() -> None:
 
             print("11. Criando catalogo de acoes permitidas e papeis...")
             _criar_catalogo_acoes_permitidas(session, modos)
+
+            print("12. Criando requisitos normativos...")
+            n_req = comum.criar_normas_e_requisitos(session, carregar_normas())
+            print(f"  {n_req} requisitos criados.")
+
+            print("12. Criando planos de manutencao e listas de tarefa...")
+            n_pm = comum.criar_planos_manutencao(session)
+            print(f"  {n_pm} planos criados.")
+
+            print("12. Criando indicadores de processo...")
+            n_ind = comum.criar_indicadores(session)
+            print(f"  {n_ind} indicadores criados.")
+
+            # Precisa vir ANTES das funcoes derivadas (partes, etapas): elas
+            # olham defeitos e ordens existentes, e rodar depois faria a
+            # primeira passada divergir da segunda.
+            print("12. Criando defeitos resolvidos com cadeia completa...")
+            n_res = comum.criar_defeitos_resolvidos(session, DEFEITOS_RESOLVIDOS)
+            print(f"  {n_res} defeitos resolvidos criados.")
+
+            print("12. Criando partes de objeto e localizando defeitos...")
+            n_po = comum.criar_partes_objeto(session)
+            print(f"  {n_po} localizacoes de defeito criadas.")
+
+            print("12. Criando consequencias de nota...")
+            n_cns = comum.criar_consequencias_nota(session)
+            print(f"  {n_cns} notas atreladas a consequencia.")
+
+            print("12. Criando etapas das ordens corretivas...")
+            n_etp = comum.criar_etapas_das_ordens(session)
+            print(f"  {n_etp} etapas criadas.")
+
+            print("12. Ligando organizacao (centro de trabalho, planejamento)...")
+            comum.ligar_organizacao(session)
 
         print("=== Seeder Eletrico concluido com sucesso ===")
     finally:

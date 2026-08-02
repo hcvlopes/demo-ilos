@@ -124,6 +124,54 @@ header .badge {
   border: 1px solid #fecaca;
 }
 
+/* Exemplos clicaveis, agrupados por tipo de pergunta. Agrupar importa: sao
+   27 intencoes, e uma lista corrida nao deixa ver que tipos de pergunta o
+   grafo responde. */
+.exemplos { align-self: stretch; max-width: 100%; }
+
+.exemplo-grupo { margin-bottom: 12px; }
+
+.exemplo-grupo-titulo {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.exemplo-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.chip-exemplo {
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: left;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.chip-exemplo:hover { border-color: var(--primary); background: #eff6ff; }
+
+.chip-exemplo:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* O grupo que sustenta a tese ganha destaque: dependencia, norma e acao
+   permitida sao o que o grafo declara e um dashboard nao. */
+.exemplo-grupo.tese .chip-exemplo { border-color: #bfdbfe; background: #eff6ff; }
+.exemplo-grupo.tese .chip-exemplo:hover { border-color: var(--primary); background: #dbeafe; }
+
+@media (prefers-reduced-motion: reduce) {
+  .chip-exemplo { transition: none; }
+}
+
 .chat-input {
   padding: 12px 16px;
   border-top: 1px solid var(--border);
@@ -328,14 +376,10 @@ table th {
     <div class="panel-body" id="chat-messages">
       <div class="chat-messages" id="messages">
         <div class="msg msg-system">
-          Faca uma pergunta sobre ativos, defeitos ou processos operacionais.
-          <br><br>
-          Exemplos:
-          <br>- Explique o defeito DEF-001
-          <br>- Qual o historico do equipamento EQ-TRE-001?
-          <br>- Quais acoes ja foram tomadas para o defeito DEF-002?
-          <br>- Quais ativos estao em risco no processo PO-001?
+          Faca uma pergunta sobre ativos, defeitos, normas ou processos.
+          Clique num exemplo ou escreva a sua.
         </div>
+        <div class="exemplos" id="exemplos"></div>
       </div>
     </div>
     <div class="chat-input">
@@ -459,6 +503,9 @@ function renderEvidence(data) {
   html += '<div class="meta-row">';
   html += '<span class="meta-chip intent">' + escapeHtml(data.intencao_classificada) + '</span>';
   for (const [k, v] of Object.entries(data.parametros)) {
+    // Parametro vazio significa que a intencao resolveu a referencia sozinha
+    // (unico no daquele rotulo). Mostrar "grupo_id:" sem valor so confunde.
+    if (v === '' || v === null || v === undefined) continue;
     html += '<span class="meta-chip">' + escapeHtml(k) + ': ' + escapeHtml(String(v)) + '</span>';
   }
   if (data.origem_classificacao) {
@@ -605,8 +652,92 @@ function layoutNodes(nos, W, H, R) {
   return positions;
 }
 
+// Cada grupo cobre um tipo de pergunta que o grafo responde. O primeiro e o
+// que sustenta a tese: norma aplicavel e acao permitida nao estao declaradas
+// em dashboard nenhum.
+const GRUPOS_EXEMPLO = [
+  {
+    titulo: 'Norma e autorizacao',
+    tese: true,
+    perguntas: [
+      'Quais equipamentos estao sujeitos a NR-12?',
+      'Quais requisitos incidem sobre o EQ-MOE-001?',
+      'O que um tecnico pode fazer?',
+      'Quais acoes sao permitidas para o defeito DEF-001?',
+    ],
+  },
+  {
+    titulo: 'Falha',
+    perguntas: [
+      'Explique o defeito DEF-001',
+      'Mostre a cadeia de falha do DEF-901',
+      'Qual a peca afetada pelo DEF-001?',
+      'Quais defeitos estao abertos?',
+      'Quais defeitos ja foram resolvidos?',
+    ],
+  },
+  {
+    titulo: 'Impacto e risco',
+    perguntas: [
+      'Qual o impacto de parada do ATV-PRT-01?',
+      'Quais ativos estao em risco no processo PO-001?',
+      'Qual o pior sistema em confiabilidade?',
+      'Quais as dependencias do ATV-PRT-01?',
+    ],
+  },
+  {
+    titulo: 'Manutencao',
+    perguntas: [
+      'Qual o plano de manutencao do ATV-PRT-01?',
+      'Quais as etapas da ordem OM-DEF-901?',
+      'Qual a consequencia das notas do EQ-TRE-001?',
+      'Qual o historico do EQ-TRE-001?',
+    ],
+  },
+  {
+    titulo: 'Planta e organizacao',
+    perguntas: [
+      'Resumo do sistema SIS-PRT',
+      'Liste os equipamentos do ATV-PRT-01',
+      'Qual a carga do centro de manutencao CT-MNT-001?',
+      'O que o planejamento central cobre?',
+    ],
+  },
+];
+
+function montarExemplos() {
+  const container = document.getElementById('exemplos');
+  if (!container) return;
+  for (const grupo of GRUPOS_EXEMPLO) {
+    const bloco = document.createElement('div');
+    bloco.className = 'exemplo-grupo' + (grupo.tese ? ' tese' : '');
+
+    const titulo = document.createElement('div');
+    titulo.className = 'exemplo-grupo-titulo';
+    titulo.textContent = grupo.titulo;
+    bloco.appendChild(titulo);
+
+    const chips = document.createElement('div');
+    chips.className = 'exemplo-chips';
+    for (const pergunta of grupo.perguntas) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip-exemplo';
+      b.textContent = pergunta;
+      b.addEventListener('click', () => {
+        inputEl.value = pergunta;
+        enviar();
+      });
+      chips.appendChild(b);
+    }
+    bloco.appendChild(chips);
+    container.appendChild(bloco);
+  }
+}
+
 carregarIntencoes();
 carregarSaude();
+montarExemplos();
 </script>
 
 </body>

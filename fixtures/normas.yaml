@@ -1,3 +1,84 @@
-# Normas aplicáveis
-# Preencher conforme necessário.
-normas: []
+# Normas aplicaveis e seus requisitos.
+#
+# ATENCAO — natureza destes dados:
+#
+# Os codigos de norma (ISO 14224:2016, NR-12, NBR 5410) sao referencias reais.
+# Os REQUISITOS abaixo, porem, sao registros SINTETICOS escritos para a demo:
+# descrevem o tema de que cada norma trata, mas NAO reproduzem a numeracao de
+# itens nem o texto normativo oficial. Nenhum item aqui deve ser citado como
+# se fosse transcricao da norma.
+#
+# Antes de qualquer uso com cliente real, substituir por extracao revisada do
+# texto oficial, com a numeracao correta.
+#
+# Vocabulario setorial nao entra aqui (regra 3 do CLAUDE.md): as descricoes
+# valem tanto para agro quanto para eletrico.
+
+normas:
+  - id: NORMA-ISO14224
+    codigo: "ISO 14224:2016"
+    descricao: Coleta e intercambio de dados de confiabilidade e manutencao
+    # Alcanca todo o parque: a norma trata de como registrar dados de falha,
+    # o que vale para qualquer classe de equipamento.
+    classes_aplicaveis: "*"
+    requisitos:
+      - id: REQ-ISO14224-TAX
+        descricao: Equipamento classificado em taxonomia ate nivel de classe
+        criticidade: alta
+      - id: REQ-ISO14224-MOD
+        descricao: Falha registrada com modo, causa e mecanismo codificados
+        criticidade: alta
+      - id: REQ-ISO14224-EXP
+        descricao: Tempo de exposicao registrado em horas de operacao
+        criticidade: alta
+      - id: REQ-ISO14224-INC
+        descricao: Metrica de confiabilidade acompanhada de intervalo de confianca
+        criticidade: media
+
+  - id: NORMA-NR12
+    codigo: "NR-12"
+    descricao: Seguranca no trabalho em maquinas e equipamentos
+    # Classes com parte movel acessivel, onde o risco mecanico existe.
+    # Valvulas manuais, trocadores e transformadores ficam de fora: nao tem
+    # acionamento motorizado proprio.
+    classes_aplicaveis:
+      - CT-BCC
+      - CT-BCP
+      - CT-CMP
+      - CT-MOE
+      - CT-VEN
+      - CT-TRE
+      - CT-ELB
+      - CT-SEC
+      - CT-GER
+    requisitos:
+      - id: REQ-NR12-PRT
+        descricao: Protecao contra acesso a zonas de perigo em partes moveis
+        criticidade: alta
+      - id: REQ-NR12-BLQ
+        descricao: Bloqueio e sinalizacao de energia antes de intervencao
+        criticidade: alta
+      - id: REQ-NR12-EMG
+        descricao: Dispositivo de parada de emergencia acessivel
+        criticidade: alta
+      - id: REQ-NR12-CAP
+        descricao: Capacitacao registrada do executante da intervencao
+        criticidade: media
+
+  - id: NORMA-NBR5410
+    codigo: "NBR 5410"
+    descricao: Instalacoes eletricas de baixa tensao
+    # Classes com acionamento ou circuito eletrico proprio.
+    classes_aplicaveis:
+      - CT-MOE
+      - CT-TRF
+      - CT-DJT
+      - CT-GER
+      - CT-VCT
+    requisitos:
+      - id: REQ-NBR5410-ATR
+        descricao: Aterramento verificado e continuidade comprovada
+        criticidade: alta
+      - id: REQ-NBR5410-SEC
+        descricao: Secionamento com meio de corte visivel
+        criticidade: media

@@ -80,41 +80,200 @@ def _construir_prompt_sistema() -> str:
     return "\n".join(linhas)
 
 
-_REGRAS_FALLBACK = [
-    (r"expli(?:que|car)\b.*\bprocesso\b", "explicar_processo", "processo_id"),
-    (r"expli(?:que|car)\b.*\bdefeito\b", "explicar_defeito", "defeito_id"),
-    (r"equipamentos?\b.*\bativo\b|listar?\b.*\bequipamentos?\b", "listar_equipamentos_ativo", "ativo_id"),
-    (r"resumo\b.*\bsistema\b|sistema\b.*\bresumo\b", "resumo_sistema", "sistema_id"),
-    (r"resumo\b.*\bedifica|edifica.*\bresumo\b", "resumo_edificacao", "edificacao_id"),
-    (r"depend[eê]ncia|upstream|downstream", "dependencias_ativo", "ativo_id"),
-    (r"defeitos?\s+(aberto|pendente)|aberto.*defeito|quais\s+defeitos|defeitos\s+est[aã]o", "defeitos_abertos", None),
-    (r"ord(?:em|ens)\s+(?:de\s+)?manuten[çc][aã]o", "ordens_manutencao", "equipamento_id"),
-    (r"norma|regulament|requisito", "normas_aplicaveis", "equipamento_id"),
-    (r"monitor|sensor|medi[çc][aã]o|condi[çc][aã]o", "monitoramento_equipamento", "equipamento_id"),
-    (r"cadeia\b.*\bfalha|falha.*\bcadeia|modo.*causa.*mecanismo", "cadeia_falha", "defeito_id"),
-    (r"estat[ií]stica|lambda|confiabilidade.*classe|classe.*confiabilidade", "estatisticas_classe", "classe_id"),
-    (r"impacto.*parada|parada.*impacto|redundância|redund[aâ]ncia", "impacto_parada", "ativo_id"),
-    (r"plano.*manuten|manuten.*plano", "plano_manutencao_ativo", "ativo_id"),
-    (r"a[çc][oõ]es?\s+permitid|pode\s+fazer|autoriza", "acoes_permitidas", "equipamento_id"),
-    (r"hist[oó]rico|eventos?\s+de\s+falha|timeline", "historico_equipamento", "equipamento_id"),
-    (r"risco|ranking|escore", "ativos_em_risco_por_processo", "processo_id"),
+# Extratores de parametro. Cada um sabe reconhecer um tipo de referencia na
+# pergunta; o padrao generico cobre IDs compostos como ATV-PRT-01.
+_ID_PATTERN = re.compile(r"\b([A-Z]{1,5}(?:-[A-Z0-9]{1,5}){1,3})\b")
+
+# Codigo de norma nao segue o formato de ID: "NBR 5410" e "ISO 14224" tem
+# espaco, e o usuario escreve como quiser.
+_NORMA_PATTERN = re.compile(
+    r"\b(NR\s*-?\s*\d{1,2}|NBR\s*\d{3,5}|ISO\s*\d{4,5}|NORMA-[A-Z0-9]+)\b",
+    re.IGNORECASE,
+)
+
+# Papel vem por nome, nao por codigo — ninguem pergunta por "PAPEL-TEC".
+_PAPEIS = [
+    (r"t[eé]cnic", "PAPEL-TEC"),
+    (r"supervisor", "PAPEL-SUP"),
+    (r"engenheir", "PAPEL-ENG"),
 ]
 
-_ID_PATTERN = re.compile(r"\b([A-Z]{1,5}(?:-[A-Z0-9]{1,5}){1,3})\b")
+
+def _extrair_id(pergunta: str) -> str:
+    m = _ID_PATTERN.search(pergunta)
+    return m.group(1) if m else ""
+
+
+def _extrair_norma(pergunta: str) -> str:
+    """Normaliza o codigo da norma para a forma gravada no grafo."""
+    m = _NORMA_PATTERN.search(pergunta)
+    if not m:
+        return ""
+    bruto = m.group(1).upper()
+    if bruto.startswith("NORMA-"):
+        return bruto
+    digitos = re.sub(r"\D", "", bruto)
+    if bruto.startswith("NBR"):
+        return f"NBR {digitos}"
+    if bruto.startswith("ISO"):
+        return f"ISO {digitos}:2016"
+    if bruto.startswith("NR"):
+        return f"NR-{digitos}"
+    return bruto
+
+
+def _extrair_papel(pergunta: str) -> str:
+    texto = pergunta.lower()
+    for padrao, papel_id in _PAPEIS:
+        if re.search(padrao, texto):
+            return papel_id
+    return _extrair_id(pergunta)
+
+
+# Ordem importa: a primeira regra que casar decide. As mais especificas vem
+# antes das genericas — "quais equipamentos estao sujeitos a NR-12" precisa
+# cair em conformidade_normativa, nao na regra generica de "norma".
+_REGRAS_FALLBACK = [
+    # --- Conformidade: tres regras disputam o vocabulario de norma ---
+    (
+        (
+            r"(?:sujeit|alcanc|abrang|conformidade|atende).*"
+            r"(?:nr\s*-?\s*\d|nbr\s*\d|iso\s*\d)"
+            r"|(?:nr\s*-?\s*\d|nbr\s*\d|iso\s*\d).*"
+            r"(?:sujeit|alcanc|abrang|exige|imp[oõ]e|requisito|aplica|equipamento)"
+        ),
+        "conformidade_normativa", "norma_id", _extrair_norma),
+    (r"requisito", "requisitos_equipamento", "equipamento_id", _extrair_id),
+    (r"\bnormas?\b|regulament", "normas_aplicaveis", "equipamento_id", _extrair_id),
+
+    # --- Autorizacao ---
+    (
+        (
+            r"(?:t[eé]cnic|supervisor|engenheir).*(?:pode|autoriz|permitid|executar)"
+            r"|(?:pode|autoriz|permitid).*(?:t[eé]cnic|supervisor|engenheir)"
+            r"|\bpap[eé]is\b|\bpapel\b|quem\s+(?:pode|autoriza)"
+        ),
+        "acoes_por_papel", "papel_id", _extrair_papel),
+    (
+        (
+            r"a[çc][oõ]es?\s+permitid|o\s+que\s+(?:eu\s+)?posso\s+fazer|pode\s+ser\s+feito"
+            r"|que\s+a[çc][aã]o|quais\s+a[çc][oõ]es"
+        ),
+        "acoes_permitidas", "defeito_id", _extrair_id),
+
+    # --- Defeitos: resolvido antes de aberto ---
+    (
+        (
+            r"defeitos?\b.{0,24}?(?:resolvid|encerrad|fechad|conclu)"
+            r"|(?:resolvid|encerrad|fechad).*defeito|hist[oó]rico\s+de\s+resolu"
+        ),
+        "defeitos_resolvidos", None, None),
+    (
+        (
+            r"defeitos?\s+(?:em\s+)?(?:aberto|abertos|pendente)|aberto.*defeito"
+            r"|quais\s+defeitos|defeitos?\s+est[aã]o|\blist\w*\s+(?:os\s+)?defeitos|tem\s+defeito"
+        ),
+        "defeitos_abertos", None, None),
+
+    # --- Cadeia e localizacao ---
+    (r"cadeia\b.*\bfalha|falha.*\bcadeia|modo.*causa.*mecanismo",
+     "cadeia_falha", "defeito_id", _extrair_id),
+    (
+        (
+            r"(?:qual|que)\s+(?:a\s+)?(?:parte|pe[çc]a|componente)|onde\s+(?:esta|est[aá]|fica)"
+            r"|localiza|parte\s+afetada|mesma\s+pe[çc]a"
+        ),
+        "localizacao_defeito", "defeito_id", _extrair_id),
+
+    # --- Ordens e planos ---
+    (r"etapas?\b|passos?\b|sequ[eê]ncia\s+de\s+execu|quem\s+executa",
+     "etapas_ordem", "ordem_id", _extrair_id),
+    (r"plano.*manuten|manuten.*plano|preventiv.*cobr|lista\s+de\s+tarefa",
+     "plano_manutencao_ativo", "ativo_id", _extrair_id),
+    (r"ord(?:em|ens)\s+(?:de\s+)?manuten|\bordens?\b",
+     "ordens_manutencao", "equipamento_id", _extrair_id),
+
+    # --- Notas ---
+    (
+        (
+            r"consequ[eê]ncia|gravidade\s+das?\s+nota|severidade|impacto\s+das?\s+nota"
+            r"|notas?\s+de\s+manuten"
+        ),
+        "consequencia_notas", "equipamento_id", _extrair_id),
+
+    # --- Organizacao ---
+    (
+        (
+            r"centro\s+de\s+(?:trabalho|manuten)|carga\s+d[eo]\s+centro"
+            r"|quantos?\s+equipamentos?\s+atend"
+        ),
+        "carga_centro_trabalho", "centro_id", _extrair_id),
+    (
+        (
+            r"grupo\s+de\s+planejamento|planejamento\s+central|escopo\s+do\s+grupo"
+            r"|planejad[oa]\s+por"
+        ),
+        "escopo_grupo_planejamento", "grupo_id", _extrair_id),
+
+    # --- Comparacao e risco ---
+    (
+        (
+            r"(?:ranking|compar|pior|melhor|menos\s+confi[aá]vel|mais\s+cr[ií]tic)"
+            r".*\bsistemas?\b|\bsistemas?\b.*"
+            r"(?:ranking|compar|pior|menos\s+confi[aá]vel|mais\s+cr[ií]tic)"
+        ),
+        "ranking_sistemas", "edificacao_id", _extrair_id),
+    (r"risco|escore|ranking", "ativos_em_risco_por_processo", "processo_id", _extrair_id),
+
+    # --- Navegacao e explicacao ---
+    (r"expli(?:que|car)\b.*\bprocesso\b|processo\s+operacional|indicador",
+     "explicar_processo", "processo_id", _extrair_id),
+    (
+        (
+            r"expli(?:que|car)\b.*\bdefeito\b|o\s+que\s+(?:e|h[aá])\s+(?:no\s+)?defeito"
+            r"|detalh.*defeito|sobre\s+o\s+defeito"
+        ),
+        "explicar_defeito", "defeito_id", _extrair_id),
+    (r"equipamentos?\b.*\bativo\b|\blist\w*\b.*\bequipamentos?\b|comp[oõ]e\s+o\s+ativo",
+     "listar_equipamentos_ativo", "ativo_id", _extrair_id),
+    (r"resumo\b.*\bsistema\b|sistema\b.*\bresumo\b|vis[aã]o\s+geral.*sistema",
+     "resumo_sistema", "sistema_id", _extrair_id),
+    (
+        (
+            r"resumo\b.*\bedifica|edifica.*\bresumo\b|vis[aã]o\s+geral.*edifica"
+            r"|planta\s+inteira"
+        ),
+        "resumo_edificacao", "edificacao_id", _extrair_id),
+    (r"depend[eê]ncia|upstream|downstream|do\s+que\s+depende|alimenta",
+     "dependencias_ativo", "ativo_id", _extrair_id),
+    (
+        (
+            r"impacto.*parada|parada.*impacto|redund[aâ]ncia|se\s+.*\bparar\b"
+            r"|deixar\s+de\s+operar"
+        ),
+        "impacto_parada", "ativo_id", _extrair_id),
+    (r"monitor|sensor|medi[çc][aã]o|condi[çc][aã]o|tend[eê]ncia",
+     "monitoramento_equipamento", "equipamento_id", _extrair_id),
+    (
+        (
+            r"estat[ií]stica|lambda|taxa\s+de\s+falha|confiabilidade.*classe"
+            r"|classe.*confiabilidade"
+        ),
+        "estatisticas_classe", "classe_id", _extrair_id),
+    (r"hist[oó]rico|eventos?\s+de\s+falha|timeline|j[aá]\s+falhou",
+     "historico_equipamento", "equipamento_id", _extrair_id),
+]
 
 
 def _classificar_fallback(pergunta: str, motivo: str | None = None) -> ClassificacaoIntencao:
     """Classificador por regex — fallback quando o LLM nao esta disponivel."""
     texto = pergunta.lower()
-    for pattern, intencao, param_key in _REGRAS_FALLBACK:
+    for pattern, intencao, param_key, extrator in _REGRAS_FALLBACK:
         if re.search(pattern, texto):
             parametros = {}
             if param_key:
-                match = _ID_PATTERN.search(pergunta)
-                if match:
-                    parametros[param_key] = match.group(1)
-                else:
-                    parametros[param_key] = ""
+                # Extrator ausente equivale ao generico de ID.
+                parametros[param_key] = (extrator or _extrair_id)(pergunta)
             return ClassificacaoIntencao(
                 intencao=intencao,
                 parametros=parametros,

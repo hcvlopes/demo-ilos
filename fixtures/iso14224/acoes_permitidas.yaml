@@ -1,0 +1,59 @@
+- codigo: AP-SUB
+  descricao: Substituicao do componente
+  tipo: corretiva
+  modos_aplicaveis: [VIB, ELP, ERO, BRD, OHE, SHC]
+  complexidade: alta
+
+- codigo: AP-ALN
+  descricao: Alinhamento e balanceamento
+  tipo: corretiva
+  modos_aplicaveis: [VIB, NOI]
+  complexidade: media
+
+- codigo: AP-LUB
+  descricao: Lubrificacao
+  tipo: preventiva
+  modos_aplicaveis: [VIB, OHE, NOI, ERO]
+  complexidade: baixa
+
+- codigo: AP-VED
+  descricao: Troca de vedacao
+  tipo: corretiva
+  modos_aplicaveis: [ELP, INL]
+  complexidade: media
+
+- codigo: AP-CAL
+  descricao: Calibracao de instrumento
+  tipo: preventiva
+  modos_aplicaveis: [ERO, HIO, LOO, SHC]
+  complexidade: baixa
+
+- codigo: AP-INS
+  descricao: Inspecao visual detalhada
+  tipo: preditiva
+  modos_aplicaveis: [VIB, ELP, INL, BRD, ERO, OHE, SER]
+  complexidade: baixa
+
+- codigo: AP-MON
+  descricao: Monitoramento por condicao
+  tipo: preditiva
+  modos_aplicaveis: [VIB, OHE, NOI, ELP]
+  complexidade: baixa
+
+- codigo: AP-REP
+  descricao: Reparo localizado
+  tipo: corretiva
+  modos_aplicaveis: [BRD, ERO, ELP, INL, SER]
+  complexidade: media
+
+- codigo: AP-OVH
+  descricao: Overhaul completo
+  tipo: corretiva
+  modos_aplicaveis: [VIB, ELP, ERO, BRD, OHE, LOO, UST]
+  complexidade: alta
+
+- codigo: AP-LIM
+  descricao: Limpeza tecnica
+  tipo: preventiva
+  modos_aplicaveis: [INL, OHE, SER]
+  complexidade: baixa

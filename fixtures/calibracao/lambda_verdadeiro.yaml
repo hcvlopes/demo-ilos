@@ -1,0 +1,99 @@
+# Lambda verdadeiro por classe taxonômica — gabarito de calibração
+#
+# Derivado de ISO 14224:2016 Tabelas B.x (medianas de campo publicadas).
+# lambda_ref_1e6h (falhas por 10^6 horas de operação) convertido para
+# lambda_por_hora_operacao = lambda_ref_1e6h / 1_000_000.
+#
+# Usado pelo gerador (F2) e pelo teste de calibração para verificar
+# que o estimador recupera lambda dentro do IC 95%.
+
+classes:
+  - classe_id: "CT-BCC"
+    descricao: "Bomba centrífuga"
+    lambda_ref_1e6h: 1200
+    lambda_por_hora_operacao: 0.0012
+    unidade: "falhas/hora"
+
+  - classe_id: "CT-BCP"
+    descricao: "Bomba de pistão"
+    lambda_ref_1e6h: 2500
+    lambda_por_hora_operacao: 0.0025
+    unidade: "falhas/hora"
+
+  - classe_id: "CT-CMP"
+    descricao: "Compressor centrífugo"
+    lambda_ref_1e6h: 1800
+    lambda_por_hora_operacao: 0.0018
+    unidade: "falhas/hora"
+
+  - classe_id: "CT-MOE"
+    descricao: "Motor elétrico"
+    lambda_ref_1e6h: 350
+    lambda_por_hora_operacao: 0.00035
+    unidade: "falhas/hora"
+
+  - classe_id: "CT-VCT"
+    descricao: "Válvula de controle"
+    lambda_ref_1e6h: 700
+    lambda_por_hora_operacao: 0.0007
+    unidade: "falhas/hora"
+
+  - classe_id: "CT-VSG"
+    descricao: "Válvula de segurança (PSV)"
+    lambda_ref_1e6h: 450
+    lambda_por_hora_operacao: 0.00045
+    unidade: "falhas/hora"
+
+  - classe_id: "CT-VMA"
+    descricao: "Válvula manual"
+    lambda_ref_1e6h: 150
+    lambda_por_hora_operacao: 0.00015
+    unidade: "falhas/hora"
+
+  - classe_id: "CT-VEN"
+    descricao: "Ventilador / soprador"
+    lambda_ref_1e6h: 550
+    lambda_por_hora_operacao: 0.00055
+    unidade: "falhas/hora"
+
+  - classe_id: "CT-TRF"
+    descricao: "Transformador de potência"
+    lambda_ref_1e6h: 80
+    lambda_por_hora_operacao: 0.00008
+    unidade: "falhas/hora"
+
+  - classe_id: "CT-DJT"
+    descricao: "Disjuntor de alta tensão"
+    lambda_ref_1e6h: 200
+    lambda_por_hora_operacao: 0.0002
+    unidade: "falhas/hora"
+
+  - classe_id: "CT-TCL"
+    descricao: "Trocador de calor"
+    lambda_ref_1e6h: 250
+    lambda_por_hora_operacao: 0.00025
+    unidade: "falhas/hora"
+
+  - classe_id: "CT-TRE"
+    descricao: "Transportador (correia/rosca)"
+    lambda_ref_1e6h: 950
+    lambda_por_hora_operacao: 0.00095
+    unidade: "falhas/hora"
+
+  - classe_id: "CT-ELB"
+    descricao: "Elevador de canecas"
+    lambda_ref_1e6h: 1100
+    lambda_por_hora_operacao: 0.0011
+    unidade: "falhas/hora"
+
+  - classe_id: "CT-SEC"
+    descricao: "Secador industrial"
+    lambda_ref_1e6h: 800
+    lambda_por_hora_operacao: 0.0008
+    unidade: "falhas/hora"
+
+  - classe_id: "CT-GER"
+    descricao: "Gerador elétrico"
+    lambda_ref_1e6h: 400
+    lambda_por_hora_operacao: 0.0004
+    unidade: "falhas/hora"

@@ -1,0 +1,67 @@
+# Modos de falha ISO 14224 — Tabela B.2 (referência)
+# Códigos padronizados pela norma para classificação de falhas.
+
+modos:
+  - codigo: "FTS"
+    descricao: "Falha ao partir"
+    aplicavel_a: ["CT-BCC", "CT-BCP", "CT-CMP", "CT-MOE", "CT-VEN", "CT-GER"]
+
+  - codigo: "FTO"
+    descricao: "Falha ao abrir"
+    aplicavel_a: ["CT-VCT", "CT-VSG", "CT-VMA", "CT-DJT"]
+
+  - codigo: "FTC"
+    descricao: "Falha ao fechar"
+    aplicavel_a: ["CT-VCT", "CT-VSG", "CT-VMA", "CT-DJT"]
+
+  - codigo: "ELP"
+    descricao: "Vazamento externo — meio de processo"
+    aplicavel_a: ["CT-BCC", "CT-BCP", "CT-CMP", "CT-VCT", "CT-VSG", "CT-VMA", "CT-TCL"]
+
+  - codigo: "INL"
+    descricao: "Vazamento interno"
+    aplicavel_a: ["CT-VCT", "CT-VSG", "CT-VMA", "CT-TCL"]
+
+  - codigo: "UST"
+    descricao: "Parada espúria"
+    aplicavel_a: ["CT-BCC", "CT-BCP", "CT-CMP", "CT-MOE", "CT-VEN", "CT-GER"]
+
+  - codigo: "BRD"
+    descricao: "Colapso / quebra"
+    aplicavel_a: ["CT-BCC", "CT-BCP", "CT-CMP", "CT-MOE", "CT-TRE", "CT-ELB", "CT-SEC"]
+
+  - codigo: "ERO"
+    descricao: "Saída errática"
+    aplicavel_a: ["CT-BCC", "CT-BCP", "CT-CMP", "CT-VCT", "CT-VEN"]
+
+  - codigo: "HIO"
+    descricao: "Saída alta"
+    aplicavel_a: ["CT-BCC", "CT-BCP", "CT-CMP", "CT-VEN"]
+
+  - codigo: "LOO"
+    descricao: "Saída baixa"
+    aplicavel_a: ["CT-BCC", "CT-BCP", "CT-CMP", "CT-VEN", "CT-GER"]
+
+  - codigo: "VIB"
+    descricao: "Vibração anormal"
+    aplicavel_a: ["CT-BCC", "CT-BCP", "CT-CMP", "CT-MOE", "CT-VEN", "CT-TRE", "CT-ELB", "CT-GER"]
+
+  - codigo: "OHE"
+    descricao: "Superaquecimento"
+    aplicavel_a: ["CT-MOE", "CT-TRF", "CT-DJT", "CT-GER", "CT-SEC"]
+
+  - codigo: "NOI"
+    descricao: "Ruído anormal"
+    aplicavel_a: ["CT-BCC", "CT-BCP", "CT-CMP", "CT-MOE", "CT-VEN", "CT-TRE", "CT-ELB"]
+
+  - codigo: "SER"
+    descricao: "Deficiência estrutural"
+    aplicavel_a: ["CT-TCL", "CT-SEC", "CT-TRE", "CT-ELB"]
+
+  - codigo: "SHC"
+    descricao: "Curto-circuito"
+    aplicavel_a: ["CT-MOE", "CT-TRF", "CT-DJT", "CT-GER"]
+
+  - codigo: "OTH"
+    descricao: "Outro"
+    aplicavel_a: ["CT-BCC", "CT-BCP", "CT-CMP", "CT-MOE", "CT-VCT", "CT-VSG", "CT-VMA", "CT-VEN", "CT-TRF", "CT-DJT", "CT-TCL", "CT-TRE", "CT-ELB", "CT-SEC", "CT-GER"]

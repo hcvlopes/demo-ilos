@@ -1,0 +1,38 @@
+# Causas de falha ISO 14224 — Tabela B.3 (referência)
+
+causas:
+  - codigo: "DES"
+    descricao: "Relacionada a projeto"
+
+  - codigo: "FAB"
+    descricao: "Fabricação / manufatura"
+
+  - codigo: "INS"
+    descricao: "Instalação"
+
+  - codigo: "OPE"
+    descricao: "Condições operacionais"
+
+  - codigo: "MNT"
+    descricao: "Relacionada a manutenção"
+
+  - codigo: "AGE"
+    descricao: "Envelhecimento / desgaste"
+
+  - codigo: "COR"
+    descricao: "Corrosão"
+
+  - codigo: "ERN"
+    descricao: "Erosão"
+
+  - codigo: "CON"
+    descricao: "Contaminação"
+
+  - codigo: "OVS"
+    descricao: "Sobre-velocidade"
+
+  - codigo: "OVP"
+    descricao: "Sobrepressão"
+
+  - codigo: "MIS"
+    descricao: "Diversos / não classificado"

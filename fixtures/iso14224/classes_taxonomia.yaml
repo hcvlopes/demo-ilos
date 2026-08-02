@@ -1,0 +1,97 @@
+# Classes taxonômicas ISO 14224 — Tabela A.1 (referência)
+# Valores de lambda de referência em falhas por 10^6 horas de operação,
+# derivados de ISO 14224:2016 Tabelas B.x (medianas de campo publicadas).
+#
+# ATENÇÃO: valores de referência para demo. Em produção, calibrar com dados
+# reais do cliente conforme ISO 14224 Anexo B.
+
+classes:
+  - classe_id: "CT-BCC"
+    descricao: "Bomba centrífuga"
+    categoria: "Equipamento rotativo"
+    lambda_ref_1e6h: 1200
+    fonte: "ISO 14224:2016 Table B.3"
+
+  - classe_id: "CT-BCP"
+    descricao: "Bomba de pistão"
+    categoria: "Equipamento rotativo"
+    lambda_ref_1e6h: 2500
+    fonte: "ISO 14224:2016 Table B.3"
+
+  - classe_id: "CT-CMP"
+    descricao: "Compressor centrífugo"
+    categoria: "Equipamento rotativo"
+    lambda_ref_1e6h: 1800
+    fonte: "ISO 14224:2016 Table B.4"
+
+  - classe_id: "CT-MOE"
+    descricao: "Motor elétrico"
+    categoria: "Equipamento rotativo"
+    lambda_ref_1e6h: 350
+    fonte: "ISO 14224:2016 Table B.6"
+
+  - classe_id: "CT-VCT"
+    descricao: "Válvula de controle"
+    categoria: "Equipamento estático"
+    lambda_ref_1e6h: 700
+    fonte: "ISO 14224:2016 Table B.7"
+
+  - classe_id: "CT-VSG"
+    descricao: "Válvula de segurança (PSV)"
+    categoria: "Equipamento estático"
+    lambda_ref_1e6h: 450
+    fonte: "ISO 14224:2016 Table B.7"
+
+  - classe_id: "CT-VMA"
+    descricao: "Válvula manual"
+    categoria: "Equipamento estático"
+    lambda_ref_1e6h: 150
+    fonte: "ISO 14224:2016 Table B.7"
+
+  - classe_id: "CT-VEN"
+    descricao: "Ventilador / soprador"
+    categoria: "Equipamento rotativo"
+    lambda_ref_1e6h: 550
+    fonte: "ISO 14224:2016 Table B.5"
+
+  - classe_id: "CT-TRF"
+    descricao: "Transformador de potência"
+    categoria: "Equipamento elétrico"
+    lambda_ref_1e6h: 80
+    fonte: "ISO 14224:2016 Table B.11"
+
+  - classe_id: "CT-DJT"
+    descricao: "Disjuntor de alta tensão"
+    categoria: "Equipamento elétrico"
+    lambda_ref_1e6h: 200
+    fonte: "ISO 14224:2016 Table B.12"
+
+  - classe_id: "CT-TCL"
+    descricao: "Trocador de calor"
+    categoria: "Equipamento estático"
+    lambda_ref_1e6h: 250
+    fonte: "ISO 14224:2016 Table B.8"
+
+  - classe_id: "CT-TRE"
+    descricao: "Transportador (correia/rosca)"
+    categoria: "Equipamento rotativo"
+    lambda_ref_1e6h: 950
+    fonte: "ISO 14224:2016 Table B.13"
+
+  - classe_id: "CT-ELB"
+    descricao: "Elevador de canecas"
+    categoria: "Equipamento rotativo"
+    lambda_ref_1e6h: 1100
+    fonte: "ISO 14224:2016 Table B.13"
+
+  - classe_id: "CT-SEC"
+    descricao: "Secador industrial"
+    categoria: "Equipamento estático"
+    lambda_ref_1e6h: 800
+    fonte: "ISO 14224:2016 Table B.9"
+
+  - classe_id: "CT-GER"
+    descricao: "Gerador elétrico"
+    categoria: "Equipamento rotativo"
+    lambda_ref_1e6h: 400
+    fonte: "ISO 14224:2016 Table B.6"

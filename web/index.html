@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo ILOS — Agentes sobre Grafo de Ativos</title>
+<style>
+:root {
+  --bg: #f5f6fa;
+  --surface: #ffffff;
+  --text: #1a1a2e;
+  --text-muted: #6b7280;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --accent: #059669;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --border: #e5e7eb;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+header h1 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+header .badge {
+  font-size: 11px;
+  background: var(--primary);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 16px 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  min-height: calc(100vh - 56px);
+}
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 88px);
+}
+
+.panel-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.msg {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.msg-user {
+  align-self: flex-end;
+  background: var(--primary);
+  color: white;
+}
+
+.msg-system {
+  align-self: flex-start;
+  background: #f0f0f0;
+  color: var(--text);
+}
+
+.msg-error {
+  align-self: flex-start;
+  background: #fef2f2;
+  color: var(--danger);
+  border: 1px solid #fecaca;
+}
+
+.chat-input {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+}
+
+.chat-input input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  outline: none;
+}
+
+.chat-input input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.15);
+}
+
+.chat-input button {
+  padding: 10px 20px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.chat-input button:hover { background: var(--primary-hover); }
+.chat-input button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.evidence-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.section {
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.afirmacao {
+  font-size: 15px;
+  font-weight: 500;
+  padding: 12px;
+  background: #eff6ff;
+  border-left: 3px solid var(--primary);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  margin-bottom: 16px;
+}
+
+.meta-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.meta-chip {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: #f3f4f6;
+  color: var(--text-muted);
+}
+
+.meta-chip.intent {
+  background: #dbeafe;
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.graph-container {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.graph-container svg {
+  width: 100%;
+  display: block;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+table th, table td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+table th {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin: 1px;
+}
+
+.tag-node { background: #dbeafe; color: #1e40af; }
+.tag-norm { background: #d1fae5; color: #065f46; }
+.tag-gap { background: #fef3c7; color: #92400e; }
+
+.lacuna-item {
+  font-size: 13px;
+  padding: 4px 0;
+  color: var(--warning);
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.lacuna-item::before {
+  content: "!";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background: #fef3c7;
+  color: var(--warning);
+  border-radius: 50%;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  flex-shrink: 0;
+}
+
+.loading {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e5e7eb;
+  border-top: 2px solid var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Demo ILOS</h1>
+  <span class="badge" id="badge-intencoes">carregando...</span>
+</header>
+
+<div class="layout">
+  <div class="panel">
+    <div class="panel-header">Pergunta</div>
+    <div class="panel-body" id="chat-messages">
+      <div class="chat-messages" id="messages">
+        <div class="msg msg-system">
+          Faca uma pergunta sobre ativos, defeitos ou processos operacionais.
+          <br><br>
+          Exemplos:
+          <br>- Explique o defeito DEF-001
+          <br>- Qual o historico do equipamento EQ-TRE-001?
+          <br>- Quais acoes ja foram tomadas para o defeito DEF-002?
+          <br>- Quais ativos estao em risco no processo PO-001?
+        </div>
+      </div>
+    </div>
+    <div class="chat-input">
+      <input type="text" id="input-pergunta" placeholder="Digite sua pergunta..." autofocus>
+      <button id="btn-enviar" onclick="enviar()">Enviar</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">Evidencia</div>
+    <div class="panel-body" id="evidence-panel">
+      <div class="evidence-empty" id="evidence-empty">
+        Faca uma pergunta para ver a evidencia aqui.
+      </div>
+      <div id="evidence-content" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const messagesEl = document.getElementById('messages');
+const inputEl = document.getElementById('input-pergunta');
+const btnEl = document.getElementById('btn-enviar');
+const evidenceEmpty = document.getElementById('evidence-empty');
+const evidenceContent = document.getElementById('evidence-content');
+
+inputEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); }
+});
+
+async function carregarIntencoes() {
+  try {
+    const resp = await fetch('/intencoes');
+    const data = await resp.json();
+    document.getElementById('badge-intencoes').textContent = data.length + ' intencoes';
+  } catch (e) {
+    document.getElementById('badge-intencoes').textContent = 'offline';
+  }
+}
+
+function addMsg(text, cls) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + cls;
+  div.innerHTML = text;
+  messagesEl.appendChild(div);
+  messagesEl.parentElement.scrollTop = messagesEl.parentElement.scrollHeight;
+  return div;
+}
+
+async function enviar() {
+  const pergunta = inputEl.value.trim();
+  if (!pergunta) return;
+
+  addMsg(escapeHtml(pergunta), 'msg-user');
+  inputEl.value = '';
+  btnEl.disabled = true;
+
+  const loadMsg = addMsg('<span class="loading"></span> Processando...', 'msg-system');
+
+  try {
+    const resp = await fetch('/pergunta', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pergunta}),
+    });
+
+    loadMsg.remove();
+
+    if (!resp.ok) {
+      const err = await resp.json();
+      addMsg(err.detail || 'Erro desconhecido', 'msg-error');
+      btnEl.disabled = false;
+      return;
+    }
+
+    const data = await resp.json();
+    addMsg(escapeHtml(data.envelope.afirmacao), 'msg-system');
+    renderEvidence(data);
+
+  } catch (e) {
+    loadMsg.remove();
+    addMsg('Erro de conexao: ' + escapeHtml(e.message), 'msg-error');
+  }
+
+  btnEl.disabled = false;
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function renderEvidence(data) {
+  evidenceEmpty.style.display = 'none';
+  evidenceContent.style.display = 'block';
+
+  const env = data.envelope;
+  let html = '';
+
+  html += '<div class="meta-row">';
+  html += '<span class="meta-chip intent">' + escapeHtml(data.intencao_classificada) + '</span>';
+  for (const [k, v] of Object.entries(data.parametros)) {
+    html += '<span class="meta-chip">' + escapeHtml(k) + ': ' + escapeHtml(String(v)) + '</span>';
+  }
+  html += '</div>';
+
+  html += '<div class="afirmacao">' + escapeHtml(env.afirmacao) + '</div>';
+
+  if (env.nos && env.nos.length > 0) {
+    html += '<div class="section">';
+    html += '<div class="section-title">Grafo (' + env.nos.length + ' nos, ' + env.arestas.length + ' arestas)</div>';
+    html += renderGraph(env.nos, env.arestas);
+    html += '</div>';
+  }
+
+  if (env.calculos && env.calculos.length > 0) {
+    html += '<div class="section">';
+    html += '<div class="section-title">Calculos</div>';
+    html += '<div style="overflow-x:auto;">';
+    html += '<table><tr><th>Nome</th><th>Formula</th><th>Valor</th><th>Unidade</th><th>IC</th></tr>';
+    for (const c of env.calculos) {
+      const ic = (c.ic_inferior != null && c.ic_superior != null)
+        ? '[' + fmt(c.ic_inferior) + ', ' + fmt(c.ic_superior) + ']' : '-';
+      html += '<tr><td>' + escapeHtml(c.nome) + '</td>';
+      html += '<td><code>' + escapeHtml(c.formula) + '</code></td>';
+      html += '<td><strong>' + fmt(c.valor) + '</strong></td>';
+      html += '<td>' + escapeHtml(c.unidade) + '</td>';
+      html += '<td>' + ic + '</td></tr>';
+    }
+    html += '</table></div></div>';
+  }
+
+  if (env.normas && env.normas.length > 0) {
+    html += '<div class="section">';
+    html += '<div class="section-title">Normas aplicaveis</div>';
+    for (const n of env.normas) {
+      html += '<span class="tag tag-norm">' + escapeHtml(n.codigo) + '</span> ';
+    }
+    html += '</div>';
+  }
+
+  if (env.lacunas && env.lacunas.length > 0) {
+    html += '<div class="section">';
+    html += '<div class="section-title">Lacunas</div>';
+    for (const l of env.lacunas) {
+      html += '<div class="lacuna-item">' + escapeHtml(l) + '</div>';
+    }
+    html += '</div>';
+  }
+
+  evidenceContent.innerHTML = html;
+}
+
+function fmt(v) {
+  if (v == null) return '-';
+  if (typeof v === 'number') {
+    return Math.abs(v) < 0.01 ? v.toExponential(4) : v.toFixed(4);
+  }
+  return String(v);
+}
+
+function renderGraph(nos, arestas) {
+  const W = 600, H = 320, R = 24;
+  const colorMap = {
+    Defeito: '#ef4444', Equipamento: '#3b82f6', ClasseTaxonomia: '#8b5cf6',
+    ModoFalha: '#f97316', CausaFalha: '#ec4899', MecanismoFalha: '#6366f1',
+    MetricaConfiabilidade: '#10b981', Norma: '#059669', EventoFalha: '#f59e0b',
+    OrdemManutencao: '#06b6d4', NotaManutencao: '#64748b', Ativo: '#2563eb',
+    Funcao: '#7c3aed', ProcessoOperacional: '#0891b2', Entrega: '#0d9488',
+    Contrato: '#4f46e5', Sensor: '#84cc16', PontoMedicao: '#14b8a6',
+    RegistroCondicao: '#a855f7',
+  };
+
+  const idToIdx = {};
+  nos.forEach((n, i) => { idToIdx[n.id] = i; });
+
+  const positions = layoutNodes(nos, W, H, R);
+
+  let svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + ' ' + H + '" style="background:#fafbfc;">';
+
+  svg += '<defs><marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">';
+  svg += '<polygon points="0 0, 8 3, 0 6" fill="#94a3b8"/></marker></defs>';
+
+  for (const e of arestas) {
+    const si = idToIdx[e.origem_id];
+    const ti = idToIdx[e.destino_id];
+    if (si == null || ti == null) continue;
+    const s = positions[si], t = positions[ti];
+    if (!s || !t) continue;
+    const dx = t.x - s.x, dy = t.y - s.y;
+    const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+    const sx = s.x + (dx/dist)*R, sy = s.y + (dy/dist)*R;
+    const tx = t.x - (dx/dist)*R, ty = t.y - (dy/dist)*R;
+    svg += '<line x1="'+sx+'" y1="'+sy+'" x2="'+tx+'" y2="'+ty+'" stroke="#cbd5e1" stroke-width="1" marker-end="url(#arrowhead)"/>';
+  }
+
+  for (let i = 0; i < nos.length; i++) {
+    const n = nos[i], p = positions[i];
+    if (!p) continue;
+    const color = colorMap[n.label] || '#6b7280';
+    svg += '<circle cx="'+p.x+'" cy="'+p.y+'" r="'+R+'" fill="'+color+'" opacity="0.85"/>';
+    const short = n.id.length > 12 ? n.id.slice(0,10)+'..' : n.id;
+    svg += '<text x="'+p.x+'" y="'+(p.y+4)+'" text-anchor="middle" fill="white" font-size="8" font-weight="500">' + escapeHtml(short) + '</text>';
+  }
+
+  svg += '</svg>';
+
+  let legend = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">';
+  const seen = new Set();
+  for (const n of nos) {
+    if (seen.has(n.label)) continue;
+    seen.add(n.label);
+    const c = colorMap[n.label] || '#6b7280';
+    legend += '<span style="font-size:10px;display:flex;align-items:center;gap:3px;">';
+    legend += '<span style="width:8px;height:8px;border-radius:50%;background:'+c+';display:inline-block;"></span>';
+    legend += escapeHtml(n.label) + '</span>';
+  }
+  legend += '</div>';
+
+  return '<div class="graph-container">' + svg + '</div>' + legend;
+}
+
+function layoutNodes(nos, W, H, R) {
+  const n = nos.length;
+  if (n === 0) return [];
+  const positions = [];
+  const cols = Math.ceil(Math.sqrt(n * W / H));
+  const rows = Math.ceil(n / cols);
+  const cellW = W / (cols + 1);
+  const cellH = H / (rows + 1);
+  for (let i = 0; i < n; i++) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    positions.push({
+      x: cellW * (col + 1) + (Math.sin(i * 2.1) * cellW * 0.2),
+      y: cellH * (row + 1) + (Math.cos(i * 1.7) * cellH * 0.15),
+    });
+  }
+  return positions;
+}
+
+carregarIntencoes();
+</script>
+
+</body>
+</html>

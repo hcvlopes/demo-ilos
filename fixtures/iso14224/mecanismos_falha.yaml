@@ -1,0 +1,56 @@
+# Mecanismos de falha ISO 14224 — Tabela B.4 (referência)
+
+mecanismos:
+  - codigo: "WEA"
+    descricao: "Desgaste"
+
+  - codigo: "CRK"
+    descricao: "Trinca"
+
+  - codigo: "BRK"
+    descricao: "Quebra"
+
+  - codigo: "DEF"
+    descricao: "Deformação"
+
+  - codigo: "COR"
+    descricao: "Corrosão"
+
+  - codigo: "ERO"
+    descricao: "Erosão"
+
+  - codigo: "BLO"
+    descricao: "Bloqueio / obstrução"
+
+  - codigo: "LEA"
+    descricao: "Vazamento"
+
+  - codigo: "LOO"
+    descricao: "Folga / afrouxamento"
+
+  - codigo: "OVH"
+    descricao: "Superaquecimento"
+
+  - codigo: "BUR"
+    descricao: "Queima"
+
+  - codigo: "SHC"
+    descricao: "Curto-circuito"
+
+  - codigo: "MAL"
+    descricao: "Desalinhamento"
+
+  - codigo: "FAT"
+    descricao: "Fadiga"
+
+  - codigo: "EMB"
+    descricao: "Fragilização"
+
+  - codigo: "STK"
+    descricao: "Travamento (sticking)"
+
+  - codigo: "CAV"
+    descricao: "Cavitação"
+
+  - codigo: "OTH"
+    descricao: "Outro"

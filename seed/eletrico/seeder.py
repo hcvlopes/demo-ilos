@@ -548,34 +548,34 @@ def seed() -> None:
             n_req = comum.criar_normas_e_requisitos(session, carregar_normas())
             print(f"  {n_req} requisitos criados.")
 
-            print("12. Criando planos de manutencao e listas de tarefa...")
+            print("13. Criando planos de manutencao e listas de tarefa...")
             n_pm = comum.criar_planos_manutencao(session)
             print(f"  {n_pm} planos criados.")
 
-            print("12. Criando indicadores de processo...")
+            print("14. Criando indicadores de processo...")
             n_ind = comum.criar_indicadores(session)
             print(f"  {n_ind} indicadores criados.")
 
             # Precisa vir ANTES das funcoes derivadas (partes, etapas): elas
             # olham defeitos e ordens existentes, e rodar depois faria a
             # primeira passada divergir da segunda.
-            print("12. Criando defeitos resolvidos com cadeia completa...")
+            print("15. Criando defeitos resolvidos com cadeia completa...")
             n_res = comum.criar_defeitos_resolvidos(session, DEFEITOS_RESOLVIDOS)
             print(f"  {n_res} defeitos resolvidos criados.")
 
-            print("12. Criando partes de objeto e localizando defeitos...")
+            print("16. Criando partes de objeto e localizando defeitos...")
             n_po = comum.criar_partes_objeto(session)
             print(f"  {n_po} localizacoes de defeito criadas.")
 
-            print("12. Criando consequencias de nota...")
+            print("17. Criando consequencias de nota...")
             n_cns = comum.criar_consequencias_nota(session)
             print(f"  {n_cns} notas atreladas a consequencia.")
 
-            print("12. Criando etapas das ordens corretivas...")
+            print("18. Criando etapas das ordens corretivas...")
             n_etp = comum.criar_etapas_das_ordens(session)
             print(f"  {n_etp} etapas criadas.")
 
-            print("12. Ligando organizacao (centro de trabalho, planejamento)...")
+            print("19. Ligando organizacao (centro de trabalho, planejamento)...")
             comum.ligar_organizacao(session)
 
         print("=== Seeder Eletrico concluido com sucesso ===")

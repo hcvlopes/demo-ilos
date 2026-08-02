@@ -24,10 +24,17 @@ from intents.registry import REGISTRY, get_intencao
 
 
 class ClassificacaoIntencao(BaseModel):
-    """Resultado da classificacao do LLM."""
+    """Resultado da classificacao.
+
+    `origem` declara qual classificador produziu o resultado: "llm" quando o
+    Ollama respondeu, "fallback" quando o classificador por regex assumiu.
+    `motivo_fallback` guarda a causa da degradacao para diagnostico.
+    """
 
     intencao: str
     parametros: dict
+    origem: str = "llm"
+    motivo_fallback: str | None = None
 
 
 class ResultadoOrquestrador(BaseModel):
@@ -36,6 +43,8 @@ class ResultadoOrquestrador(BaseModel):
     pergunta: str
     intencao_classificada: str
     parametros: dict
+    origem_classificacao: str = "llm"
+    motivo_fallback: str | None = None
     envelope: EnvelopeEvidencia
 
 
@@ -94,8 +103,8 @@ _REGRAS_FALLBACK = [
 _ID_PATTERN = re.compile(r"\b([A-Z]{1,5}(?:-[A-Z0-9]{1,5}){1,3})\b")
 
 
-def _classificar_fallback(pergunta: str) -> ClassificacaoIntencao:
-    """Classificador por regex — fallback quando LLM nao esta disponivel."""
+def _classificar_fallback(pergunta: str, motivo: str | None = None) -> ClassificacaoIntencao:
+    """Classificador por regex — fallback quando o LLM nao esta disponivel."""
     texto = pergunta.lower()
     for pattern, intencao, param_key in _REGRAS_FALLBACK:
         if re.search(pattern, texto):
@@ -106,8 +115,76 @@ def _classificar_fallback(pergunta: str) -> ClassificacaoIntencao:
                     parametros[param_key] = match.group(1)
                 else:
                     parametros[param_key] = ""
-            return ClassificacaoIntencao(intencao=intencao, parametros=parametros)
-    return ClassificacaoIntencao(intencao="desconhecida", parametros={})
+            return ClassificacaoIntencao(
+                intencao=intencao,
+                parametros=parametros,
+                origem="fallback",
+                motivo_fallback=motivo,
+            )
+    return ClassificacaoIntencao(
+        intencao="desconhecida",
+        parametros={},
+        origem="fallback",
+        motivo_fallback=motivo,
+    )
+
+
+def criar_cliente_ollama(host: str | None = None):
+    """Cria o cliente Ollama. Levanta se o pacote nao estiver instalado."""
+    from ollama import Client as OllamaClient
+
+    if host is None:
+        host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    return OllamaClient(host=host)
+
+
+def verificar_ollama(client=None, modelo: str | None = None) -> dict:
+    """Diagnostica o LLM: servidor alcancavel e modelo baixado.
+
+    Devolve dict com `disponivel`, `host`, `modelo`, `modelos_disponiveis` e
+    `detalhe`. Usado pelo /saude para que a degradacao para regex seja
+    visivel em vez de silenciosa.
+    """
+    host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    if modelo is None:
+        modelo = os.environ.get("OLLAMA_MODEL", "llama3.1")
+
+    info = {
+        "disponivel": False,
+        "host": host,
+        "modelo": modelo,
+        "modelos_disponiveis": [],
+        "detalhe": "",
+    }
+
+    try:
+        if client is None:
+            client = criar_cliente_ollama(host)
+        resposta = client.list()
+    except ImportError:
+        info["detalhe"] = "Pacote 'ollama' nao instalado. Rode: pip install -e ."
+        return info
+    except Exception as e:
+        info["detalhe"] = f"Servidor Ollama inacessivel em {host}: {e}"
+        return info
+
+    nomes = []
+    for m in resposta.get("models", []) if isinstance(resposta, dict) else getattr(resposta, "models", []):
+        nome = m.get("model") or m.get("name") if isinstance(m, dict) else getattr(m, "model", None)
+        if nome:
+            nomes.append(nome)
+    info["modelos_disponiveis"] = nomes
+
+    # Ollama aceita "llama3.1" para uma tag "llama3.1:latest".
+    if any(n == modelo or n.split(":")[0] == modelo.split(":")[0] for n in nomes):
+        info["disponivel"] = True
+        info["detalhe"] = f"Ollama respondendo em {host} com o modelo '{modelo}'."
+    else:
+        info["detalhe"] = (
+            f"Ollama respondendo em {host}, mas o modelo '{modelo}' nao foi baixado. "
+            f"Rode: ollama pull {modelo}"
+        )
+    return info
 
 
 def classificar_intencao(
@@ -115,15 +192,17 @@ def classificar_intencao(
     client=None,
     modelo: str | None = None,
 ) -> ClassificacaoIntencao:
-    """Classifica a intencao via LLM (Ollama) com fallback regex."""
+    """Classifica a intencao via LLM (Ollama), degradando para regex se falhar.
+
+    A degradacao nunca e silenciosa: o resultado carrega `origem` e
+    `motivo_fallback` para que a interface mostre qual classificador rodou.
+    """
     if modelo is None:
         modelo = os.environ.get("OLLAMA_MODEL", "llama3.1")
 
     try:
-        from ollama import Client as OllamaClient
         if client is None:
-            host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-            client = OllamaClient(host=host)
+            client = criar_cliente_ollama()
 
         response = client.chat(
             model=modelo,
@@ -141,12 +220,24 @@ def classificar_intencao(
             texto = "\n".join(linhas[1:-1])
 
         dados = json.loads(texto)
-        return ClassificacaoIntencao(
-            intencao=dados.get("intencao", "desconhecida"),
-            parametros=dados.get("parametros", {}),
+    except ImportError:
+        return _classificar_fallback(pergunta, "Pacote 'ollama' nao instalado.")
+    except json.JSONDecodeError as e:
+        return _classificar_fallback(pergunta, f"LLM devolveu JSON invalido: {e}")
+    except Exception as e:
+        return _classificar_fallback(pergunta, f"Falha ao consultar o LLM: {e}")
+
+    intencao = dados.get("intencao", "desconhecida")
+    if intencao not in REGISTRY and intencao != "desconhecida":
+        return _classificar_fallback(
+            pergunta, f"LLM classificou intencao inexistente: '{intencao}'.",
         )
-    except Exception:
-        return _classificar_fallback(pergunta)
+
+    return ClassificacaoIntencao(
+        intencao=intencao,
+        parametros=dados.get("parametros", {}) or {},
+        origem="llm",
+    )
 
 
 def executar_intencao(
@@ -168,7 +259,7 @@ def executar_intencao(
 def orquestrar(
     pergunta: str,
     session,
-    client: OllamaClient | None = None,
+    client=None,
     modelo: str | None = None,
 ) -> ResultadoOrquestrador:
     """Pipeline completo: pergunta -> classificacao -> execucao -> envelope."""
@@ -178,5 +269,7 @@ def orquestrar(
         pergunta=pergunta,
         intencao_classificada=classificacao.intencao,
         parametros=classificacao.parametros,
+        origem_classificacao=classificacao.origem,
+        motivo_fallback=classificacao.motivo_fallback,
         envelope=envelope,
     )

@@ -1,12 +1,16 @@
-.PHONY: up down test seed-agro seed-eletrico schema-doc lint serve
+.PHONY: up down test seed-agro seed-eletrico schema-doc lint serve llm-check
 
 FALKORDB_HOST ?= localhost
 FALKORDB_PORT ?= 6379
 FALKORDB_GRAPH ?= demo_ilos
+OLLAMA_HOST ?= http://localhost:11434
+OLLAMA_MODEL ?= llama3.1
 
 export FALKORDB_HOST
 export FALKORDB_PORT
 export FALKORDB_GRAPH
+export OLLAMA_HOST
+export OLLAMA_MODEL
 
 up:
 	docker compose up -d
@@ -33,6 +37,13 @@ schema-doc:
 
 serve:
 	uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+
+llm-check:
+	@python -c "from api.orquestrador import verificar_ollama; \
+	i = verificar_ollama(); \
+	print(('OK  ' if i['disponivel'] else 'FALHA ') + i['detalhe']); \
+	print('modelos: ' + (', '.join(i['modelos_disponiveis']) or '(nenhum)')); \
+	raise SystemExit(0 if i['disponivel'] else 1)"
 
 lint:
 	python -m ruff check .

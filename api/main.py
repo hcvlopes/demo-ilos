@@ -22,7 +22,9 @@ from pydantic import BaseModel, Field
 from api.orquestrador import (
     ResultadoOrquestrador,
     classificar_intencao,
+    criar_cliente_ollama,
     executar_intencao,
+    verificar_ollama,
 )
 from db.adapter import create_driver
 from intents.base import EnvelopeEvidencia
@@ -41,10 +43,20 @@ class IntencaoInfo(BaseModel):
     parametros: list[str]
 
 
+class LLMStatus(BaseModel):
+    disponivel: bool
+    host: str
+    modelo: str
+    modelos_disponiveis: list[str] = []
+    detalhe: str = ""
+
+
 class SaudeResponse(BaseModel):
     status: str
     grafo: str
     intencoes: int
+    llm: LLMStatus
+    classificador: str
 
 
 _driver = None
@@ -61,9 +73,7 @@ async def lifespan(app: FastAPI):
         _driver = None
 
     try:
-        from ollama import Client as OllamaClient
-        host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-        _llm_client = OllamaClient(host=host)
+        _llm_client = criar_cliente_ollama()
     except Exception:
         _llm_client = None
 
@@ -123,6 +133,8 @@ def pergunta(req: PerguntaRequest):
         pergunta=req.pergunta,
         intencao_classificada=classificacao.intencao,
         parametros=classificacao.parametros,
+        origem_classificacao=classificacao.origem,
+        motivo_fallback=classificacao.motivo_fallback,
         envelope=envelope,
     )
 
@@ -156,8 +168,12 @@ def saude():
         except Exception:
             grafo_status = "erro"
 
+    llm_info = verificar_ollama(client=_llm_client)
+
     return SaudeResponse(
         status="ok",
         grafo=grafo_status,
         intencoes=len(REGISTRY),
+        llm=LLMStatus(**llm_info),
+        classificador="llm" if llm_info["disponivel"] else "fallback-regex",
     )

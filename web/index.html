@@ -214,6 +214,26 @@ header .badge {
   font-weight: 500;
 }
 
+.meta-chip.origem-llm {
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 500;
+}
+
+.meta-chip.origem-fallback {
+  background: #fef3c7;
+  color: #92400e;
+  font-weight: 500;
+}
+
+header .badge.llm-on {
+  background: #166534;
+}
+
+header .badge.llm-off {
+  background: #b45309;
+}
+
 .graph-container {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -299,6 +319,7 @@ table th {
 <header>
   <h1>Demo ILOS</h1>
   <span class="badge" id="badge-intencoes">carregando...</span>
+  <span class="badge" id="badge-llm" title="Classificador de intencao em uso">verificando LLM...</span>
 </header>
 
 <div class="layout">
@@ -352,6 +373,26 @@ async function carregarIntencoes() {
     document.getElementById('badge-intencoes').textContent = data.length + ' intencoes';
   } catch (e) {
     document.getElementById('badge-intencoes').textContent = 'offline';
+  }
+}
+
+async function carregarSaude() {
+  const el = document.getElementById('badge-llm');
+  try {
+    const resp = await fetch('/saude');
+    const data = await resp.json();
+    const llm = data.llm || {};
+    if (llm.disponivel) {
+      el.textContent = 'LLM: ' + llm.modelo;
+      el.className = 'badge llm-on';
+    } else {
+      el.textContent = 'LLM off - regex';
+      el.className = 'badge llm-off';
+    }
+    el.title = llm.detalhe || '';
+  } catch (e) {
+    el.textContent = 'LLM: desconhecido';
+    el.className = 'badge llm-off';
   }
 }
 
@@ -419,6 +460,13 @@ function renderEvidence(data) {
   html += '<span class="meta-chip intent">' + escapeHtml(data.intencao_classificada) + '</span>';
   for (const [k, v] of Object.entries(data.parametros)) {
     html += '<span class="meta-chip">' + escapeHtml(k) + ': ' + escapeHtml(String(v)) + '</span>';
+  }
+  if (data.origem_classificacao) {
+    const llmOk = data.origem_classificacao === 'llm';
+    const cls = llmOk ? 'origem-llm' : 'origem-fallback';
+    const rotulo = llmOk ? 'classificado por LLM' : 'classificado por regex';
+    const titulo = data.motivo_fallback ? ' title="' + escapeHtml(data.motivo_fallback) + '"' : '';
+    html += '<span class="meta-chip ' + cls + '"' + titulo + '>' + rotulo + '</span>';
   }
   html += '</div>';
 
@@ -558,6 +606,7 @@ function layoutNodes(nos, W, H, R) {
 }
 
 carregarIntencoes();
+carregarSaude();
 </script>
 
 </body>

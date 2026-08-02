@@ -108,6 +108,11 @@ docs/          — Decisões, progresso, ontologia
 | `FALKORDB_GRAPH` | `demo_ilos` | Nome do grafo |
 | `OLLAMA_HOST` | `http://localhost:11434` | URL do servidor Ollama |
 | `OLLAMA_MODEL` | `llama3.1` | Modelo LLM a usar (precisa estar baixado) |
+| `PYTHON` | `python3` (ou `python`) | Interpretador usado pelo Makefile |
+
+O Makefile procura `python3` e cai para `python` — o macOS não tem `python`.
+Para apontar um interpretador específico (venv, pyenv):
+`make test PYTHON=.venv/bin/python`
 
 ## Licença
 

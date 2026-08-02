@@ -1,5 +1,9 @@
 .PHONY: up down test seed-agro seed-eletrico schema-doc lint serve llm-check
 
+# macOS nao tem `python`, so `python3`. Um venv ativo tambem resolve para o
+# interpretador certo. Sobrescreva com: make test PYTHON=/caminho/para/python
+PYTHON ?= $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null || echo python3)
+
 FALKORDB_HOST ?= localhost
 FALKORDB_PORT ?= 6379
 FALKORDB_GRAPH ?= demo_ilos
@@ -24,26 +28,26 @@ down:
 	docker compose down
 
 seed-agro:
-	python -m seed.agro.seeder
+	$(PYTHON) -m seed.agro.seeder
 
 seed-eletrico:
-	python -m seed.eletrico.seeder
+	$(PYTHON) -m seed.eletrico.seeder
 
 test:
-	python -m pytest tests/ -v
+	$(PYTHON) -m pytest tests/ -v
 
 schema-doc:
-	python -m ontology.export_schema
+	$(PYTHON) -m ontology.export_schema
 
 serve:
-	uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+	$(PYTHON) -m uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 
 llm-check:
-	@python -c "from api.orquestrador import verificar_ollama; \
+	@$(PYTHON) -c "from api.orquestrador import verificar_ollama; \
 	i = verificar_ollama(); \
 	print(('OK  ' if i['disponivel'] else 'FALHA ') + i['detalhe']); \
 	print('modelos: ' + (', '.join(i['modelos_disponiveis']) or '(nenhum)')); \
 	raise SystemExit(0 if i['disponivel'] else 1)"
 
 lint:
-	python -m ruff check .
+	$(PYTHON) -m ruff check .

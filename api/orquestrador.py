@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import os
 
-import anthropic
+from ollama import Client as OllamaClient
 from pydantic import BaseModel
 
 from intents.base import EnvelopeEvidencia
@@ -72,24 +72,27 @@ def _construir_prompt_sistema() -> str:
 
 def classificar_intencao(
     pergunta: str,
-    client: anthropic.Anthropic | None = None,
+    client: OllamaClient | None = None,
     modelo: str | None = None,
 ) -> ClassificacaoIntencao:
-    """Classifica a intencao via LLM Anthropic."""
+    """Classifica a intencao via LLM local (Ollama)."""
     if client is None:
-        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+        host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+        client = OllamaClient(host=host)
 
     if modelo is None:
-        modelo = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        modelo = os.environ.get("OLLAMA_MODEL", "llama3.1")
 
-    response = client.messages.create(
+    response = client.chat(
         model=modelo,
-        max_tokens=256,
-        system=_construir_prompt_sistema(),
-        messages=[{"role": "user", "content": pergunta}],
+        messages=[
+            {"role": "system", "content": _construir_prompt_sistema()},
+            {"role": "user", "content": pergunta},
+        ],
+        format="json",
     )
 
-    texto = response.content[0].text.strip()
+    texto = response["message"]["content"].strip()
 
     if texto.startswith("```"):
         linhas = texto.split("\n")
@@ -121,7 +124,7 @@ def executar_intencao(
 def orquestrar(
     pergunta: str,
     session,
-    client: anthropic.Anthropic | None = None,
+    client: OllamaClient | None = None,
     modelo: str | None = None,
 ) -> ResultadoOrquestrador:
     """Pipeline completo: pergunta -> classificacao -> execucao -> envelope."""

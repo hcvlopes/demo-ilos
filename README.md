@@ -8,19 +8,28 @@ subestação de distribuidora de energia (elétrico).
 
 - **FalkorDB** — banco de grafo sobre Redis (openCypher)
 - **FastAPI** — API de intenções tipadas com envelope de evidência
-- **Anthropic Claude** — classificação de intenção via LLM
+- **Ollama + Llama 3.1** — classificação de intenção via LLM local
 
 ## Quickstart
 
 ```bash
-# Subir FalkorDB
+# 1. Instalar Ollama (https://ollama.com)
+curl -fsSL https://ollama.com/install.sh | sh
+
+# 2. Baixar o modelo
+ollama pull llama3.1
+
+# 3. Instalar dependências Python
+pip install -e .
+
+# 4. Subir FalkorDB
 make up
 
-# Semear dados (agro + elétrico)
+# 5. Semear dados (agro + elétrico)
 make seed-agro
 make seed-eletrico
 
-# Rodar API + UI
+# 6. Rodar API + UI
 make serve
 # Acesse http://localhost:8000
 
@@ -51,7 +60,8 @@ docs/          — Decisões, progresso, ontologia
 | `FALKORDB_HOST` | `localhost` | Host do FalkorDB/Redis |
 | `FALKORDB_PORT` | `6379` | Porta do FalkorDB/Redis |
 | `FALKORDB_GRAPH` | `demo_ilos` | Nome do grafo |
-| `ANTHROPIC_API_KEY` | — | Chave da API Anthropic (para /pergunta) |
+| `OLLAMA_HOST` | `http://localhost:11434` | URL do servidor Ollama |
+| `OLLAMA_MODEL` | `llama3.1` | Modelo LLM a usar |
 
 ## Licença
 

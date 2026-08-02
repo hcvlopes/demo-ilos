@@ -14,7 +14,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import anthropic
+from ollama import Client as OllamaClient
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -49,21 +49,20 @@ class SaudeResponse(BaseModel):
 
 
 _driver = None
-_anthropic_client = None
+_ollama_client = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _driver, _anthropic_client
+    global _driver, _ollama_client
 
     try:
         _driver = create_driver()
     except Exception:
         _driver = None
 
-    _anthropic_client = anthropic.Anthropic(
-        api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
-    )
+    host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    _ollama_client = OllamaClient(host=host)
 
     yield
 
@@ -88,11 +87,11 @@ def index():
 @app.post("/pergunta", response_model=ResultadoOrquestrador)
 def pergunta(req: PerguntaRequest):
     """Recebe pergunta em linguagem natural e retorna envelope de evidencia."""
-    modelo = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+    modelo = os.environ.get("OLLAMA_MODEL", "llama3.1")
 
     try:
         classificacao = classificar_intencao(
-            req.pergunta, client=_anthropic_client, modelo=modelo,
+            req.pergunta, client=_ollama_client, modelo=modelo,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Erro na classificacao: {e}")

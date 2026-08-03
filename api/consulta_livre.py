@@ -23,8 +23,8 @@ import json
 import os
 import re
 
+from api.exemplos import formatar_para_prompt, selecionar
 from intents.base import (
-    ArestaEvidencia,
     CalculoEvidencia,
     EnvelopeEvidencia,
     NoEvidencia,
@@ -87,12 +87,21 @@ def descrever_schema() -> str:
     return "\n".join(linhas)
 
 
-def _prompt_sistema() -> str:
+def _prompt_sistema(pergunta: str = "") -> str:
+    """Prompt do gerador, com exemplos escolhidos pela proximidade da pergunta.
+
+    Os exemplos vem de fixtures/exemplos_consulta.yaml, e todos foram
+    executados contra o grafo semeado (`make exemplos-validar`). Mostrar ao
+    modelo uma consulta que nao roda seria pior do que nao mostrar nenhuma.
+    """
+    exemplos = formatar_para_prompt(selecionar(pergunta)) if pergunta else ""
+    bloco_exemplos = f"\n{exemplos}\n" if exemplos else ""
+
     return f"""Voce traduz perguntas sobre ativos industriais em consultas Cypher \
 de LEITURA sobre um grafo FalkorDB (openCypher).
 
 {descrever_schema()}
-
+{bloco_exemplos}
 Regras obrigatorias:
 - Somente leitura. Nunca use CREATE, MERGE, DELETE, SET, REMOVE, DROP ou FOREACH.
 - Use apenas os rotulos e relacoes listados acima. Nao invente rotulo nem relacao.
@@ -150,7 +159,7 @@ def gerar_cypher(pergunta: str, client=None, modelo: str | None = None) -> tuple
         resposta = client.chat(
             model=modelo,
             messages=[
-                {"role": "system", "content": _prompt_sistema()},
+                {"role": "system", "content": _prompt_sistema(pergunta)},
                 {"role": "user", "content": pergunta},
             ],
             format="json",

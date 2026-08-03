@@ -42,7 +42,7 @@ make seed-eletrico
 make serve
 # Acesse http://localhost:8000
 
-# Rodar testes (492 testes offline)
+# Rodar testes (745 testes offline)
 make test
 ```
 
@@ -90,6 +90,29 @@ Resposta que ninguém pode auditar não serve para decisão.
 Para voltar ao comportamento estrito de só responder por intenção versionada:
 `CONSULTA_LIVRE=0 make serve`.
 
+### Corpus de exemplos
+
+O prompt do gerador de Cypher carrega exemplos de
+`fixtures/exemplos_consulta.yaml` — 46 pares pergunta/consulta em oito
+categorias. Não vão todos: `api/exemplos.py` escolhe os mais próximos da
+pergunta por sobreposição de palavras, porque despejar o corpus inteiro
+gastaria contexto que o modelo usaria melhor raciocinando.
+
+**Todo exemplo foi executado contra o grafo semeado.** `make exemplos-validar`
+roda os 46 e reprova o que não passar na guarda, não executar, ou executar e
+não retornar linha. Esse terceiro critério é o que pega erro sutil: um Cypher
+sintaticamente válido que devolve vazio, porque errou o sentido de uma aresta,
+ensinaria o modelo a escrever consulta que não responde nada.
+
+```bash
+make exemplos-validar   # roda o corpus contra o grafo (exige make up + seeders)
+make exemplos-jsonl     # exporta em JSONL para fine-tuning
+```
+
+Testes offline garantem, sem precisar do banco, que todo exemplo passa na
+guarda, tem `LIMIT`, nomeia as colunas com `AS`, e usa só rótulos e relações
+que existem na ontologia.
+
 **3. Narração.** Nos dois caminhos o envelope é reescrito em prosa pelo LLM
 (`api/narrador.py`). O narrador **não tem acesso ao grafo** — recebe só o
 envelope já montado, então não tem de onde inventar número, e o painel ao
@@ -122,7 +145,7 @@ seed/          — Seeders agro e elétrico (Poisson não-homogêneo)
 fixtures/      — ISO 14224 (modos, causas, mecanismos, classes taxonômicas)
 vocab/         — Perfis setoriais (vocabulário resolvido em render time)
 web/           — SPA self-contained (chat + painel de evidência)
-tests/         — 492 testes offline
+tests/         — 745 testes offline
 docs/          — Decisões, progresso, ontologia
 ```
 

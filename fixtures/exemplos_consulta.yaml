@@ -1,0 +1,370 @@
+# Corpus de exemplos para o caminho de consulta livre.
+#
+# Cada entrada e um par pergunta -> Cypher que FOI EXECUTADO contra o grafo
+# semeado. `make exemplos-validar` roda todos e falha se algum quebrar ou
+# deixar de retornar linha. Exemplo nao validado ensina o modelo errado, e um
+# Cypher que nao roda no prompt e pior do que exemplo nenhum.
+#
+# Uso duplo:
+#   - few-shot: os mais proximos da pergunta entram no prompt (selecao em
+#     api/exemplos.py). Nao entram todos — estourariam o contexto.
+#   - fine-tuning: `make exemplos-jsonl` exporta em formato de treino.
+#
+# `categoria` serve para medir cobertura: o teste falha se alguma categoria
+# ficar sem exemplo.
+#
+# Convencao: toda consulta termina com LIMIT e usa `AS` em toda coluna. Isso
+# nao e estetica — o modelo copia o estilo do que ve, e coluna sem nome deixa
+# a narracao sem palavra para usar.
+
+exemplos:
+  # ---------------------------------------------------------------- hierarquia
+  - pergunta: Quantos equipamentos existem no parque?
+    categoria: hierarquia
+    cypher: MATCH (e:Equipamento) RETURN count(e) AS equipamentos LIMIT 1
+
+  - pergunta: Quais sistemas existem e quantos ativos cada um contem?
+    categoria: hierarquia
+    cypher: |
+      MATCH (s:Sistema)-[:CONTEM]->(a:Ativo)
+      RETURN s.descricao AS sistema, count(a) AS ativos
+      ORDER BY ativos DESC LIMIT 20
+
+  - pergunta: Quais equipamentos pertencem ao ativo ATV-PRT-01?
+    categoria: hierarquia
+    cypher: |
+      MATCH (e:Equipamento)-[:PERTENCE]->(a:Ativo {id: 'ATV-PRT-01'})
+      RETURN e.id AS id, e.descricao AS equipamento
+      ORDER BY e.id LIMIT 20
+
+  - pergunta: Qual edificacao tem mais equipamentos?
+    categoria: hierarquia
+    cypher: |
+      MATCH (ed:Edificacao)-[:CONTEM]->(:Sistema)-[:CONTEM]->(:Ativo)<-[:PERTENCE]-(e:Equipamento)
+      RETURN ed.descricao AS edificacao, count(DISTINCT e) AS equipamentos
+      ORDER BY equipamentos DESC LIMIT 5
+
+  - pergunta: Quantos ativos existem por sistema na edificacao EDIF-001?
+    categoria: hierarquia
+    cypher: |
+      MATCH (:Edificacao {id: 'EDIF-001'})-[:CONTEM]->(s:Sistema)-[:CONTEM]->(a:Ativo)
+      RETURN s.descricao AS sistema, count(a) AS ativos
+      ORDER BY ativos DESC LIMIT 20
+
+  # ------------------------------------------------------------------ defeitos
+  - pergunta: Quantos defeitos estao abertos?
+    categoria: defeitos
+    cypher: MATCH (d:Defeito) WHERE d.status = 'aberto' RETURN count(d) AS abertos LIMIT 1
+
+  # Ensina o padrao "agregar, depois filtrar": WITH ... WHERE sobre o
+  # resultado da contagem, que e onde o modelo mais erra em openCypher.
+  - pergunta: Quais equipamentos acumulam mais de 20 ordens de manutencao?
+    categoria: defeitos
+    cypher: |
+      MATCH (o:OrdemManutencao)-[:EXECUTADA_EM]->(e:Equipamento)
+      WITH e, count(o) AS ordens
+      WHERE ordens > 20
+      RETURN e.descricao AS equipamento, ordens
+      ORDER BY ordens DESC LIMIT 20
+
+  - pergunta: Qual o modo de falha mais frequente entre os defeitos abertos?
+    categoria: defeitos
+    cypher: |
+      MATCH (d:Defeito)-[:MANIFESTOU]->(m:ModoFalha)
+      WHERE d.status = 'aberto'
+      RETURN m.id AS modo, m.descricao AS descricao, count(d) AS ocorrencias
+      ORDER BY ocorrencias DESC LIMIT 10
+
+  - pergunta: Quais causas de falha aparecem nos defeitos abertos?
+    categoria: defeitos
+    cypher: |
+      MATCH (d:Defeito)-[:CAUSADO_POR]->(c:CausaFalha)
+      WHERE d.status = 'aberto'
+      RETURN c.descricao AS causa, count(d) AS defeitos
+      ORDER BY defeitos DESC LIMIT 10
+
+  - pergunta: Quanto tempo levou para encerrar cada defeito resolvido?
+    categoria: defeitos
+    cypher: |
+      MATCH (d:Defeito)
+      WHERE d.status = 'resolvido'
+      RETURN d.id AS defeito, d.descricao AS descricao,
+             d.data_encerramento_horas - d.data_deteccao_horas AS horas_ate_encerrar
+      ORDER BY horas_ate_encerrar DESC LIMIT 20
+
+  - pergunta: Em que partes de equipamento os defeitos foram localizados?
+    categoria: defeitos
+    cypher: |
+      MATCH (d:Defeito)-[:IDENTIFICADO_EM]->(p:ParteObjeto)
+      RETURN p.descricao AS parte, count(d) AS defeitos
+      ORDER BY defeitos DESC LIMIT 20
+
+  # ------------------------------------------------------------ confiabilidade
+  - pergunta: Quais classes taxonomicas tem a maior taxa de falha?
+    categoria: confiabilidade
+    cypher: |
+      MATCH (c:ClasseTaxonomia)-[:TEM_METRICA]->(m:MetricaConfiabilidade)
+      RETURN c.descricao AS classe, m.lambda_hat AS lambda_por_hora_operacao,
+             m.ic_inferior AS ic_inferior, m.ic_superior AS ic_superior
+      ORDER BY lambda_por_hora_operacao DESC LIMIT 10
+
+  - pergunta: Quantos eventos de falha cada classe acumulou?
+    categoria: confiabilidade
+    cypher: |
+      MATCH (c:ClasseTaxonomia)-[:TEM_METRICA]->(m:MetricaConfiabilidade)
+      RETURN c.descricao AS classe, m.n_eventos AS eventos,
+             m.horas_operacao AS horas_operacao
+      ORDER BY eventos DESC LIMIT 20
+
+  - pergunta: Quais equipamentos pertencem as classes de maior taxa de falha?
+    categoria: confiabilidade
+    cypher: |
+      MATCH (e:Equipamento)-[:CLASSIFICADO_COMO]->(c:ClasseTaxonomia)-[:TEM_METRICA]->(m:MetricaConfiabilidade)
+      RETURN e.descricao AS equipamento, c.descricao AS classe,
+             m.lambda_hat AS lambda_por_hora_operacao
+      ORDER BY lambda_por_hora_operacao DESC LIMIT 15
+
+  - pergunta: Quantos eventos de falha foram registrados no total?
+    categoria: confiabilidade
+    cypher: MATCH (ev:EventoFalha) RETURN count(ev) AS eventos LIMIT 1
+
+  # -------------------------------------------------------------------- normas
+  - pergunta: Quais normas estao cadastradas?
+    categoria: normas
+    cypher: |
+      MATCH (n:Norma)
+      RETURN n.codigo AS codigo, n.descricao AS descricao
+      ORDER BY n.codigo LIMIT 20
+
+  - pergunta: Quantos requisitos cada norma impoe?
+    categoria: normas
+    cypher: |
+      MATCH (n:Norma)-[:TEM_REQUISITO]->(r:Requisito)
+      RETURN n.codigo AS norma, count(r) AS requisitos
+      ORDER BY requisitos DESC LIMIT 20
+
+  - pergunta: Quais requisitos de criticidade alta existem?
+    categoria: normas
+    cypher: |
+      MATCH (n:Norma)-[:TEM_REQUISITO]->(r:Requisito)
+      WHERE r.criticidade = 'alta'
+      RETURN n.codigo AS norma, r.descricao AS requisito
+      ORDER BY n.codigo LIMIT 30
+
+  - pergunta: Quantas classes taxonomicas cada norma regula?
+    categoria: normas
+    cypher: |
+      MATCH (c:ClasseTaxonomia)-[:REGULADO_POR]->(n:Norma)
+      RETURN n.codigo AS norma, count(c) AS classes_reguladas
+      ORDER BY classes_reguladas DESC LIMIT 20
+
+  - pergunta: Quais equipamentos estao sujeitos a mais de uma norma?
+    categoria: normas
+    cypher: |
+      MATCH (e:Equipamento)-[:CLASSIFICADO_COMO]->(:ClasseTaxonomia)-[:REGULADO_POR]->(n:Norma)
+      WITH e, count(DISTINCT n) AS normas
+      WHERE normas > 1
+      RETURN e.descricao AS equipamento, normas
+      ORDER BY normas DESC LIMIT 20
+
+  # ---------------------------------------------------------------- manutencao
+  - pergunta: Quantas ordens de manutencao existem por tipo?
+    categoria: manutencao
+    cypher: |
+      MATCH (o:OrdemManutencao)
+      RETURN o.tipo AS tipo, count(o) AS ordens
+      ORDER BY ordens DESC LIMIT 10
+
+  - pergunta: Quais equipamentos tem mais ordens corretivas?
+    categoria: manutencao
+    cypher: |
+      MATCH (o:OrdemManutencao)-[:EXECUTADA_EM]->(e:Equipamento)
+      WHERE o.tipo = 'corretiva'
+      RETURN e.descricao AS equipamento, count(o) AS ordens_corretivas
+      ORDER BY ordens_corretivas DESC LIMIT 15
+
+  - pergunta: Quantas notas de manutencao existem por consequencia?
+    categoria: manutencao
+    cypher: |
+      MATCH (nm:NotaManutencao)-[:ATRELADA]->(c:ConsequenciaNota)
+      RETURN c.descricao AS consequencia, c.severidade AS severidade, count(nm) AS notas
+      ORDER BY notas DESC LIMIT 10
+
+  - pergunta: Quais planos de manutencao cobrem quais ativos?
+    categoria: manutencao
+    cypher: |
+      MATCH (p:PlanoManutencao)-[:COBRE]->(a:Ativo)
+      RETURN p.descricao AS plano, a.descricao AS ativo, p.periodicidade_dias AS periodicidade_dias
+      ORDER BY a.id LIMIT 20
+
+  - pergunta: Quantas etapas tem cada ordem que foi detalhada?
+    categoria: manutencao
+    cypher: |
+      MATCH (o:OrdemManutencao)-[:TEM_ETAPA]->(et:Etapa)
+      RETURN o.id AS ordem, count(et) AS etapas
+      ORDER BY etapas DESC LIMIT 20
+
+  - pergunta: Que acoes foram tomadas para resolver defeitos?
+    categoria: manutencao
+    cypher: |
+      MATCH (d:Defeito)-[:RESOLVIDO_POR]->(a:AcaoTomada)
+      RETURN d.descricao AS defeito, a.descricao AS acao_tomada,
+             a.horas_execucao AS horas_execucao
+      ORDER BY horas_execucao DESC LIMIT 20
+
+  # ------------------------------------------------------------------ operacao
+  - pergunta: Quais ativos alimentam outros ativos?
+    categoria: operacao
+    cypher: |
+      MATCH (a:Ativo)-[:ALIMENTA]->(b:Ativo)
+      RETURN a.descricao AS origem, b.descricao AS destino
+      ORDER BY a.id LIMIT 20
+
+  - pergunta: Quais ativos tem redundancia declarada?
+    categoria: operacao
+    cypher: |
+      MATCH (a:Ativo)-[r:REDUNDA_COM]->(b:Ativo)
+      RETURN a.descricao AS ativo, b.descricao AS redundante, r.capacidade AS capacidade
+      ORDER BY r.capacidade DESC LIMIT 20
+
+  - pergunta: Que funcoes cada processo operacional exige?
+    categoria: operacao
+    cypher: |
+      MATCH (p:ProcessoOperacional)-[:REQUER]->(f:Funcao)
+      RETURN p.descricao AS processo, f.descricao AS funcao
+      ORDER BY p.id LIMIT 30
+
+  - pergunta: Quais indicadores medem os processos?
+    categoria: operacao
+    cypher: |
+      MATCH (i:Indicador)-[:MEDE]->(p:ProcessoOperacional)
+      RETURN p.descricao AS processo, i.descricao AS indicador,
+             i.meta AS meta, i.unidade AS unidade
+      ORDER BY p.id LIMIT 20
+
+  - pergunta: Quais ativos nao alimentam nenhum outro ativo?
+    categoria: operacao
+    cypher: |
+      MATCH (a:Ativo)
+      WHERE NOT (a)-[:ALIMENTA]->(:Ativo)
+      RETURN a.id AS id, a.descricao AS ativo
+      ORDER BY a.id LIMIT 20
+
+  # --------------------------------------------------------------- organizacao
+  - pergunta: Quantos equipamentos cada fabricante fornece?
+    categoria: organizacao
+    cypher: |
+      MATCH (e:Equipamento)-[:FABRICADO]->(f:Fabricante)
+      RETURN f.nome AS fabricante, f.pais AS pais, count(e) AS equipamentos
+      ORDER BY equipamentos DESC LIMIT 20
+
+  - pergunta: Quantos equipamentos cada centro de trabalho atende?
+    categoria: organizacao
+    cypher: |
+      MATCH (e:Equipamento)-[:MANTIDO_POR]->(c:CentroTrabalho)
+      RETURN c.descricao AS centro, count(e) AS equipamentos
+      ORDER BY equipamentos DESC LIMIT 10
+
+  - pergunta: Que acoes cada papel pode autorizar?
+    categoria: organizacao
+    cypher: |
+      MATCH (p:Papel)-[:AUTORIZA]->(a:AcaoPermitida)
+      RETURN p.descricao AS papel, count(a) AS acoes_autorizadas
+      ORDER BY acoes_autorizadas DESC LIMIT 10
+
+  - pergunta: Quais acoes permitidas sao de alta complexidade?
+    categoria: organizacao
+    cypher: |
+      MATCH (a:AcaoPermitida)
+      WHERE a.complexidade = 'alta'
+      RETURN a.id AS id, a.descricao AS acao, a.tipo AS tipo
+      ORDER BY a.id LIMIT 20
+
+  - pergunta: Quais equipes executam etapas de manutencao?
+    categoria: organizacao
+    cypher: |
+      MATCH (et:Etapa)-[:EXECUTADA_POR]->(eq:Equipe)
+      RETURN eq.descricao AS equipe, count(et) AS etapas
+      ORDER BY etapas DESC LIMIT 10
+
+  # ----------------------------------------------------------------- cruzadas
+  # Perguntas que atravessam varios rotulos. Sao as que mais ensinam o modelo,
+  # porque mostram como encadear relacoes em vez de contar um rotulo so.
+  - pergunta: Quais equipamentos com defeito aberto estao sujeitos a NR-12?
+    categoria: cruzadas
+    cypher: |
+      MATCH (d:Defeito)-[:DETECTADO_EM]->(e:Equipamento)
+      MATCH (e)-[:CLASSIFICADO_COMO]->(:ClasseTaxonomia)-[:REGULADO_POR]->(n:Norma {codigo: 'NR-12'})
+      WHERE d.status = 'aberto'
+      RETURN e.descricao AS equipamento, d.descricao AS defeito
+      ORDER BY e.id LIMIT 20
+
+  - pergunta: Quais sistemas concentram os defeitos abertos?
+    categoria: cruzadas
+    cypher: |
+      MATCH (d:Defeito)-[:DETECTADO_EM]->(:Equipamento)-[:PERTENCE]->(:Ativo)<-[:CONTEM]-(s:Sistema)
+      WHERE d.status = 'aberto'
+      RETURN s.descricao AS sistema, count(d) AS defeitos_abertos
+      ORDER BY defeitos_abertos DESC LIMIT 10
+
+  - pergunta: Quais fabricantes fornecem equipamentos que estao com defeito?
+    categoria: cruzadas
+    cypher: |
+      MATCH (d:Defeito)-[:DETECTADO_EM]->(e:Equipamento)-[:FABRICADO]->(f:Fabricante)
+      RETURN f.nome AS fabricante, count(DISTINCT d) AS defeitos
+      ORDER BY defeitos DESC LIMIT 10
+
+  - pergunta: Que acoes sao aplicaveis aos modos de falha dos defeitos abertos?
+    categoria: cruzadas
+    cypher: |
+      MATCH (d:Defeito)-[:MANIFESTOU]->(m:ModoFalha)<-[:APLICAVEL_MODO]-(a:AcaoPermitida)
+      WHERE d.status = 'aberto'
+      RETURN m.descricao AS modo, a.descricao AS acao, a.complexidade AS complexidade
+      ORDER BY m.id LIMIT 30
+
+  - pergunta: Quais equipamentos de classes com alta taxa de falha estao sem defeito registrado?
+    categoria: cruzadas
+    cypher: |
+      MATCH (e:Equipamento)-[:CLASSIFICADO_COMO]->(c:ClasseTaxonomia)-[:TEM_METRICA]->(m:MetricaConfiabilidade)
+      WHERE NOT (:Defeito)-[:DETECTADO_EM]->(e)
+      RETURN e.descricao AS equipamento, c.descricao AS classe,
+             m.lambda_hat AS lambda_por_hora_operacao
+      ORDER BY lambda_por_hora_operacao DESC LIMIT 15
+
+  - pergunta: Que processos dependem de ativos que tem defeito aberto?
+    categoria: cruzadas
+    cypher: |
+      MATCH (d:Defeito)-[:DETECTADO_EM]->(:Equipamento)-[:PERTENCE]->(a:Ativo)-[:DESEMPENHA]->(f:Funcao)
+      MATCH (p:ProcessoOperacional)-[:REQUER]->(f)
+      WHERE d.status = 'aberto'
+      RETURN p.descricao AS processo, a.descricao AS ativo, d.descricao AS defeito
+      ORDER BY p.id LIMIT 20
+
+  - pergunta: Quais contratos dependem de quais processos?
+    categoria: cruzadas
+    cypher: |
+      MATCH (c:Contrato)-[:TEM_ENTREGA]->(e:Entrega)-[:VINCULADA]->(p:ProcessoOperacional)
+      RETURN c.descricao AS contrato, e.descricao AS entrega, p.descricao AS processo
+      ORDER BY c.id LIMIT 20
+
+  - pergunta: Quantas notas corretivas cada sistema acumulou?
+    categoria: cruzadas
+    cypher: |
+      MATCH (nm:NotaManutencao)-[:ATRIBUIDA]->(:Equipamento)-[:PERTENCE]->(:Ativo)<-[:CONTEM]-(s:Sistema)
+      WHERE nm.tipo = 'corretiva'
+      RETURN s.descricao AS sistema, count(nm) AS notas_corretivas
+      ORDER BY notas_corretivas DESC LIMIT 10
+
+  - pergunta: Quais equipamentos sao monitorados por sensor?
+    categoria: cruzadas
+    cypher: |
+      MATCH (e:Equipamento)-[:TEM_SENSOR]->(s:Sensor)
+      RETURN e.descricao AS equipamento, s.tipo AS tipo_sensor
+      ORDER BY e.id LIMIT 20
+
+  - pergunta: Qual a evolucao das medicoes de condicao registradas?
+    categoria: cruzadas
+    cypher: |
+      MATCH (e:Equipamento)-[:TEM_REGISTRO]->(r:RegistroCondicao)
+      RETURN e.descricao AS equipamento, r.valor AS valor, r.timestamp_horas AS horas
+      ORDER BY r.timestamp_horas LIMIT 30

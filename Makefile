@@ -1,4 +1,5 @@
-.PHONY: up down test seed-agro seed-eletrico schema-doc lint serve llm-check
+.PHONY: up down test seed-agro seed-eletrico schema-doc lint serve llm-check \
+        exemplos-validar exemplos-jsonl
 
 # O projeto exige Python 3.11+ (pyproject: requires-python). O `python3` do
 # macOS costuma ser o 3.9 do Command Line Tools, que nao entende `X | None`.
@@ -114,3 +115,14 @@ llm-check:
 lint:
 	$(exigir_python)
 	$(PYTHON) -m ruff check .
+
+# Roda todo exemplo do corpus contra o grafo. Exige `make up` e os seeders:
+# exemplo que nao retorna linha reprova, e so o banco semeado pode dizer isso.
+exemplos-validar:
+	$(exigir_python)
+	$(PYTHON) -m scripts.validar_exemplos
+
+# Exporta o corpus em JSONL (mensagens de chat) para fine-tuning.
+exemplos-jsonl:
+	$(exigir_python)
+	$(PYTHON) -m scripts.validar_exemplos --jsonl exemplos_treino.jsonl

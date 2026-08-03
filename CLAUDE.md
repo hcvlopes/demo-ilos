@@ -10,9 +10,25 @@ permitida — coisas que dashboard não declara.
 
 ## Regras invioláveis
 
-1. **O LLM nunca escreve Cypher.** O modelo classifica intenção e preenche
-   parâmetros tipados. Toda travessia é código versionado em `intents/`.
-   Nenhuma rota da API aceita query como entrada.
+1. **Intenção versionada primeiro; Cypher gerado só como rede.**
+
+   A regra original era "o LLM nunca escreve Cypher". Ela foi relaxada por
+   decisão do dono do produto, para ampliar o alcance das perguntas. O que
+   vale agora:
+
+   - Se alguma intenção de `intents/` cobre a pergunta, é ela que responde.
+     Travessia versionada, revisada e testada tem precedência **sempre**.
+   - Só quando nenhuma cobre, o LLM escreve Cypher (`api/consulta_livre.py`).
+   - Essa execução é **somente leitura imposta pelo servidor**
+     (`GRAPH.RO_QUERY`), não por checagem no cliente. Há guarda sintática
+     antes, mas ela existe para dar mensagem melhor — a garantia é do banco.
+   - O Cypher gerado **entra no envelope** e aparece na tela. Consulta que
+     ninguém pode auditar não vai para produção.
+   - A resposta declara qual caminho respondeu (`caminho`), e a interface
+     mostra isso. As duas não têm o mesmo grau de confiança.
+
+   Nenhuma rota da API aceita Cypher vindo do cliente. O que mudou é quem
+   escreve a consulta internamente, não a fronteira da API.
 
 2. **Toda intenção devolve envelope de evidência completo**: afirmacao, nos,
    arestas, calculos, normas, lacunas. Intenção sem envelope não passa no

@@ -42,7 +42,7 @@ make seed-eletrico
 make serve
 # Acesse http://localhost:8000
 
-# Rodar testes (204 testes offline)
+# Rodar testes (492 testes offline)
 make test
 ```
 
@@ -62,11 +62,38 @@ Essa degradação nunca é silenciosa:
 - A UI mostra um selo verde `LLM: llama3.1` ou âmbar `LLM off - regex` no
   cabeçalho, e marca cada resposta com o classificador que a produziu.
 
-Em qualquer um dos dois caminhos a regra inviolável se mantém: **o LLM nunca
-escreve Cypher**. Ele só devolve o nome de uma intenção e parâmetros, que são
-validados contra o registry e tipados por Pydantic antes de qualquer
-travessia. Parâmetro que não esteja declarado na intenção é descartado, e
-intenção inexistente é rejeitada — ambos cobertos em `tests/test_ollama.py`.
+## Como uma pergunta é respondida
+
+Caminho híbrido; a resposta declara qual dos dois respondeu.
+
+**1. Intenção versionada (preferencial).** Se alguma das 27 intenções de
+`intents/` cobre a pergunta, é ela que responde. O LLM só classifica e
+preenche parâmetros tipados; a travessia é código revisado e testado. Os
+parâmetros são validados antes de executar — parâmetro não declarado é
+descartado, intenção inexistente é rejeitada, e classificação que não tipa
+degrada para o regex.
+
+**2. Consulta livre (rede).** Quando nenhuma intenção cobre, o LLM escreve o
+Cypher (`api/consulta_livre.py`). Três camadas de contenção:
+
+- Execução via `GRAPH.RO_QUERY` — **quem recusa escrita é o FalkorDB**, não
+  uma checagem no cliente. Não há sintaxe criativa que escape.
+- Guarda sintática antes de enviar, barrando `CREATE`/`DELETE`/`SET`/`CALL` e
+  afins, inclusive escondidos em comentário. Ela existe para dar mensagem
+  legível, não como garantia.
+- `LIMIT` imposto no fim, para uma pergunta ampla não devolver o grafo.
+
+O Cypher gerado **aparece na tela**, no painel de evidência, e o envelope
+carrega uma lacuna dizendo que aquela travessia não passou por revisão.
+Resposta que ninguém pode auditar não serve para decisão.
+
+Para voltar ao comportamento estrito de só responder por intenção versionada:
+`CONSULTA_LIVRE=0 make serve`.
+
+**3. Narração.** Nos dois caminhos o envelope é reescrito em prosa pelo LLM
+(`api/narrador.py`). O narrador **não tem acesso ao grafo** — recebe só o
+envelope já montado, então não tem de onde inventar número, e o painel ao
+lado mostra os valores apurados. Sem LLM, a narrativa é a afirmação original.
 
 ### Diagnóstico
 
@@ -95,7 +122,7 @@ seed/          — Seeders agro e elétrico (Poisson não-homogêneo)
 fixtures/      — ISO 14224 (modos, causas, mecanismos, classes taxonômicas)
 vocab/         — Perfis setoriais (vocabulário resolvido em render time)
 web/           — SPA self-contained (chat + painel de evidência)
-tests/         — 204 testes offline
+tests/         — 492 testes offline
 docs/          — Decisões, progresso, ontologia
 ```
 
@@ -108,6 +135,7 @@ docs/          — Decisões, progresso, ontologia
 | `FALKORDB_GRAPH` | `demo_ilos` | Nome do grafo |
 | `OLLAMA_HOST` | `http://localhost:11434` | URL do servidor Ollama |
 | `OLLAMA_MODEL` | `llama3.1` | Modelo LLM a usar (precisa estar baixado) |
+| `CONSULTA_LIVRE` | `1` | `0` desliga o Cypher gerado; só intenções versionadas |
 | `PYTHON` | primeiro 3.11+ do PATH | Interpretador usado pelo Makefile |
 
 ### Python no macOS

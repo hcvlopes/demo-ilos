@@ -19,11 +19,11 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from api.consulta_livre import ConsultaRecusada
 from api.orquestrador import (
     ResultadoOrquestrador,
-    classificar_intencao,
     criar_cliente_ollama,
-    executar_intencao,
+    orquestrar,
     verificar_ollama,
 )
 from db.adapter import create_driver
@@ -31,6 +31,10 @@ from intents.base import EnvelopeEvidencia
 from intents.registry import REGISTRY
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+
+# Consulta livre pode ser desligada: CONSULTA_LIVRE=0 devolve a demo ao
+# comportamento estrito de so responder pelas intencoes versionadas.
+CONSULTA_LIVRE_ATIVA = os.environ.get("CONSULTA_LIVRE", "1") not in {"0", "false", "no"}
 
 
 class PerguntaRequest(BaseModel):
@@ -99,31 +103,32 @@ def index():
 
 @app.post("/pergunta", response_model=ResultadoOrquestrador)
 def pergunta(req: PerguntaRequest):
-    """Recebe pergunta em linguagem natural e retorna envelope de evidencia."""
+    """Recebe pergunta em linguagem natural e retorna evidencia + narrativa.
+
+    Caminho hibrido: intencao versionada quando alguma cobre a pergunta,
+    consulta livre (Cypher gerado, somente leitura) quando nenhuma cobre.
+    """
     modelo = os.environ.get("OLLAMA_MODEL", "llama3.1")
 
-    try:
-        classificacao = classificar_intencao(
-            req.pergunta, client=_llm_client, modelo=modelo,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Erro na classificacao: {e}")
-
-    if classificacao.intencao == "desconhecida":
+    if _driver is None:
         raise HTTPException(
-            status_code=422,
-            detail="Intencao nao reconhecida. Reformule a pergunta.",
-        )
-
-    if classificacao.intencao not in REGISTRY:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Intencao '{classificacao.intencao}' nao registrada.",
+            status_code=503,
+            detail="Grafo indisponivel. Suba o FalkorDB (make up) e reinicie a API.",
         )
 
     try:
         with _driver.session() as session:
-            envelope = executar_intencao(classificacao, session)
+            return orquestrar(
+                req.pergunta,
+                session,
+                client=_llm_client,
+                modelo=modelo,
+                permitir_consulta_livre=CONSULTA_LIVRE_ATIVA,
+            )
+    except ConsultaRecusada as e:
+        # O modelo nao produziu consulta valida, ou produziu uma que a guarda
+        # barrou. E limitacao da pergunta, nao falha do servidor.
+        raise HTTPException(status_code=422, detail=str(e))
     except KeyError as e:
         # KeyError chega com aspas do repr; a mensagem ja e escrita para o
         # usuario final e nao precisa delas.
@@ -134,15 +139,6 @@ def pergunta(req: PerguntaRequest):
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro na execucao: {e}")
-
-    return ResultadoOrquestrador(
-        pergunta=req.pergunta,
-        intencao_classificada=classificacao.intencao,
-        parametros=classificacao.parametros,
-        origem_classificacao=classificacao.origem,
-        motivo_fallback=classificacao.motivo_fallback,
-        envelope=envelope,
-    )
 
 
 @app.get("/intencoes", response_model=list[IntencaoInfo])

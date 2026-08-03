@@ -1,13 +1,22 @@
-"""Orquestrador de classificacao de intencao via LLM.
+"""Orquestrador hibrido: intencao versionada primeiro, consulta livre depois.
 
 Fluxo:
 1. Recebe pergunta em linguagem natural.
-2. Envia ao LLM com lista de intencoes disponiveis e seus parametros.
-3. LLM retorna nome da intencao + parametros tipados (JSON).
-4. Orquestrador resolve a intencao no registry e executa com sessao do grafo.
-5. Retorna EnvelopeEvidencia.
+2. Classifica a intencao (LLM, com fallback regex) e preenche parametros
+   tipados. Se alguma das 27 intencoes cobre a pergunta, a travessia usada e
+   codigo versionado em intents/ — revisado e testado.
+3. Se nenhuma cobre, cai para consulta livre: o LLM escreve o Cypher, que roda
+   em modo somente-leitura imposto pelo servidor (ver api/consulta_livre.py).
+4. O envelope resultante e narrado em linguagem natural (api/narrador.py).
 
-O LLM nunca escreve Cypher — apenas classifica intencao e preenche parametros.
+Os dois caminhos sao distinguidos no resultado (`caminho`) e na interface. A
+resposta de intencao versionada e a de Cypher gerado nao tem o mesmo grau de
+confianca, e a demo mostra qual delas respondeu.
+
+O projeto comecou com a regra "o LLM nunca escreve Cypher". A consulta livre
+foi adicionada depois, por decisao do dono do produto, para ampliar o alcance
+das perguntas. O que se manteve foi a rastreabilidade: o Cypher gerado aparece
+no envelope, e o caminho usado fica visivel.
 """
 
 from __future__ import annotations
@@ -19,6 +28,8 @@ import re
 
 from pydantic import BaseModel, ValidationError
 
+from api.consulta_livre import executar_consulta_livre
+from api.narrador import narrar
 from intents.base import EnvelopeEvidencia
 from intents.registry import REGISTRY, get_intencao
 
@@ -38,13 +49,26 @@ class ClassificacaoIntencao(BaseModel):
 
 
 class ResultadoOrquestrador(BaseModel):
-    """Resultado completo do orquestrador."""
+    """Resultado completo do orquestrador.
+
+    `caminho` declara como a resposta foi obtida:
+    - "intencao": travessia versionada em intents/, testada e revisada.
+    - "consulta_livre": Cypher gerado pelo LLM na hora, somente leitura.
+
+    A distincao e visivel na interface de proposito. As duas respostas nao
+    tem o mesmo grau de confianca, e esconder isso seria pior do que nao ter
+    a consulta livre.
+    """
 
     pergunta: str
     intencao_classificada: str
     parametros: dict
     origem_classificacao: str = "llm"
     motivo_fallback: str | None = None
+    caminho: str = "intencao"
+    cypher_gerado: str | None = None
+    narrativa: str | None = None
+    narrativa_do_llm: bool = False
     envelope: EnvelopeEvidencia
 
 
@@ -516,15 +540,49 @@ def orquestrar(
     session,
     client=None,
     modelo: str | None = None,
+    permitir_consulta_livre: bool = True,
+    narrar_resposta: bool = True,
 ) -> ResultadoOrquestrador:
-    """Pipeline completo: pergunta -> classificacao -> execucao -> envelope."""
+    """Pipeline hibrido: intencao versionada primeiro, consulta livre depois.
+
+    A ordem nao e detalhe. As 27 intencoes sao codigo revisado e testado, com
+    envelope de evidencia montado a mao; a consulta livre e Cypher escrito na
+    hora por um modelo. Quando as duas conseguem responder, a versionada e
+    melhor — entao ela tem a primeira chance, sempre.
+    """
     classificacao = classificar_intencao(pergunta, client=client, modelo=modelo)
-    envelope = executar_intencao(classificacao, session)
+
+    caminho = "intencao"
+    cypher_gerado = None
+
+    if classificacao.intencao == "desconhecida":
+        if not permitir_consulta_livre:
+            raise KeyError(
+                "Nenhuma intencao reconhece esta pergunta. Reformule ou "
+                "consulte os exemplos.",
+            )
+        envelope, cypher_gerado = executar_consulta_livre(
+            pergunta, session, client=client, modelo=modelo,
+        )
+        caminho = "consulta_livre"
+    else:
+        envelope = executar_intencao(classificacao, session)
+
+    narrativa, narrativa_do_llm = envelope.afirmacao, False
+    if narrar_resposta:
+        narrativa, narrativa_do_llm = narrar(
+            envelope, pergunta, client=client, modelo=modelo,
+        )
+
     return ResultadoOrquestrador(
         pergunta=pergunta,
         intencao_classificada=classificacao.intencao,
         parametros=classificacao.parametros,
         origem_classificacao=classificacao.origem,
         motivo_fallback=classificacao.motivo_fallback,
+        caminho=caminho,
+        cypher_gerado=cypher_gerado,
+        narrativa=narrativa,
+        narrativa_do_llm=narrativa_do_llm,
         envelope=envelope,
     )

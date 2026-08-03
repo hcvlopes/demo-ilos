@@ -119,6 +119,18 @@ class SessionWrapper:
         result = self._graph.query(query, params=parameters or {})
         return ResultWrapper(result)
 
+    def run_somente_leitura(self, travessia: str, parameters: dict | None = None):
+        """Executa via GRAPH.RO_QUERY: o servidor recusa qualquer escrita.
+
+        Usado no caminho de consulta livre, onde o Cypher vem do LLM. A
+        diferenca em relacao a uma checagem sintatica no cliente e que aqui
+        quem recusa e o proprio FalkorDB — nao ha regex a burlar. Uma escrita
+        que chegue aqui morre com "graph.RO_QUERY is to be executed only on
+        read-only queries", independente de como tenha sido escrita.
+        """
+        result = self._graph.ro_query(travessia, params=parameters or {})
+        return ResultWrapper(result)
+
     def close(self):
         pass
 

@@ -303,6 +303,44 @@ header .badge {
   font-weight: 500;
 }
 
+.meta-chip.caminho-intencao {
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 600;
+}
+
+.meta-chip.caminho-livre {
+  background: #fef3c7;
+  color: #92400e;
+  font-weight: 600;
+}
+
+/* O Cypher gerado precisa estar visivel, nao escondido atras de um clique:
+   a resposta so e auditavel se der para ler a consulta que a produziu. */
+.cypher-bloco {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  overflow-x: auto;
+}
+
+.aviso-livre {
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px 12px;
+  background: #fffbeb;
+  border-left: 3px solid var(--warning);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: #92400e;
+  margin-bottom: 12px;
+}
+
 .meta-chip.origem-fallback {
   background: #fef3c7;
   color: #92400e;
@@ -555,9 +593,30 @@ function renderEvidence(data) {
     const titulo = data.motivo_fallback ? ' title="' + escapeHtml(data.motivo_fallback) + '"' : '';
     html += '<span class="meta-chip ' + cls + '"' + titulo + '>' + rotulo + '</span>';
   }
+  // Qual caminho respondeu: travessia versionada ou Cypher gerado na hora.
+  // Sao graus de confianca diferentes e a tela nao pode esconder isso.
+  const livre = data.caminho === 'consulta_livre';
+  html += '<span class="meta-chip ' + (livre ? 'caminho-livre' : 'caminho-intencao') + '">'
+       + (livre ? 'consulta gerada' : 'intencao versionada') + '</span>';
+  if (data.narrativa_do_llm) {
+    html += '<span class="meta-chip">narrado por LLM</span>';
+  }
   html += '</div>';
 
+  if (livre) {
+    html += '<div class="aviso-livre">Nenhuma intencao versionada cobre esta '
+         + 'pergunta. A consulta abaixo foi escrita pelo modelo e executada em '
+         + 'modo somente leitura. Confira o Cypher antes de usar o numero.</div>';
+  }
+
   html += '<div class="afirmacao">' + escapeHtml(env.afirmacao) + '</div>';
+
+  if (data.cypher_gerado) {
+    html += '<div class="section">';
+    html += '<div class="section-title">Consulta executada</div>';
+    html += '<div class="cypher-bloco">' + escapeHtml(data.cypher_gerado) + '</div>';
+    html += '</div>';
+  }
 
   if (env.nos && env.nos.length > 0) {
     html += '<div class="section">';

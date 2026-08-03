@@ -246,3 +246,27 @@ class TestEnvelopeDaConsultaLivre:
         for campo in ["afirmacao", "nos", "arestas", "calculos", "normas", "lacunas"]:
             assert hasattr(envelope, campo)
         assert envelope.afirmacao
+
+
+class TestLLMIndisponivel:
+    """Sem Ollama, pergunta fora do catalogo nao pode virar 500.
+
+    O caminho de intencao continua funcionando sem LLM (fallback regex). Se a
+    consulta livre deixasse subir o ConnectionError cru, a pergunta fora do
+    catalogo devolveria erro de conexao em vez de dizer o que fazer — e no
+    palco isso aconteceria justamente quando o Ollama engasgasse.
+    """
+
+    def test_falha_de_conexao_vira_consulta_recusada(self):
+        client = criar_cliente_ollama("http://127.0.0.1:1")
+        with pytest.raises(ConsultaRecusada) as exc:
+            gerar_cypher("quantos equipamentos por fabricante", client)
+        mensagem = str(exc.value)
+        assert "consulta livre precisa do LLM" in mensagem
+        assert "make llm-check" in mensagem
+
+    def test_json_invalido_do_gerador_vira_consulta_recusada(self, stub_cypher):
+        host, stub = stub_cypher
+        stub.resposta = "isso nao e json"
+        with pytest.raises(ConsultaRecusada, match="JSON valido"):
+            gerar_cypher("qualquer coisa", criar_cliente_ollama(host))

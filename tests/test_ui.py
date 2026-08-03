@@ -164,3 +164,38 @@ class TestCatalogoDeExemplos:
             sig = inspect.signature(type(inst).executar)
             tipo = list(sig.parameters.values())[2].annotation
             tipo(**c.parametros)
+
+
+class TestNarrativaNaInterface:
+    """A narrativa nao pode substituir o numero apurado — precisa acompanha-lo."""
+
+    @staticmethod
+    def _html() -> str:
+        return (Path(__file__).resolve().parent.parent / "web" / "index.html").read_text(
+            encoding="utf-8",
+        )
+
+    def test_usa_a_narrativa_quando_existe(self):
+        assert "data.narrativa || data.envelope.afirmacao" in self._html()
+
+    def test_mostra_o_apurado_junto_da_narrativa(self):
+        """Se o modelo arredondar, o valor do grafo esta na linha seguinte."""
+        html = self._html()
+        assert "msg-apurado" in html
+        assert "data.envelope.afirmacao" in html
+
+    def test_nao_duplica_quando_nao_houve_narracao(self):
+        """Sem LLM narrativa == afirmacao; mostrar as duas seria ruido."""
+        html = self._html()
+        assert "data.narrativa !== data.envelope.afirmacao" in html
+
+    def test_marca_o_caminho_da_resposta(self):
+        html = self._html()
+        assert "caminho-livre" in html
+        assert "caminho-intencao" in html
+        assert "consulta gerada" in html
+
+    def test_exibe_o_cypher_gerado(self):
+        html = self._html()
+        assert "cypher_gerado" in html
+        assert "cypher-bloco" in html

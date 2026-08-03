@@ -117,6 +117,26 @@ header .badge {
   color: var(--text);
 }
 
+/* A narrativa e escrita pelo LLM; a afirmacao abaixo dela e o que o grafo
+   apurou. Ficam juntas de proposito: se o modelo arredondar ou trocar um
+   nome, o numero certo esta na linha seguinte, nao escondido no painel. */
+.msg-apurado {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(0,0,0,0.12);
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.msg-apurado::before {
+  content: "apurado: ";
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+}
+
 .msg-error {
   align-self: flex-start;
   background: #fef2f2;
@@ -555,7 +575,13 @@ async function enviar() {
     }
 
     const data = await resp.json();
-    addMsg(escapeHtml(data.envelope.afirmacao), 'msg-system');
+    // Narrativa do LLM em cima; o que o grafo apurou logo abaixo. So duplica
+    // quando o texto veio mesmo do modelo — sem LLM as duas seriam iguais.
+    let corpo = escapeHtml(data.narrativa || data.envelope.afirmacao);
+    if (data.narrativa_do_llm && data.narrativa !== data.envelope.afirmacao) {
+      corpo += '<div class="msg-apurado">' + escapeHtml(data.envelope.afirmacao) + '</div>';
+    }
+    addMsg(corpo, 'msg-system');
     renderEvidence(data);
 
   } catch (e) {

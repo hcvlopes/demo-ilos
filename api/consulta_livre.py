@@ -142,19 +142,36 @@ def gerar_cypher(pergunta: str, client=None, modelo: str | None = None) -> tuple
 
         client = criar_cliente_ollama()
 
-    resposta = client.chat(
-        model=modelo,
-        messages=[
-            {"role": "system", "content": _prompt_sistema()},
-            {"role": "user", "content": pergunta},
-        ],
-        format="json",
-    )
-    texto = resposta["message"]["content"].strip()
+    # A consulta livre depende do LLM: sem ele nao ha o que gerar. Falha de
+    # transporte aqui precisa virar ConsultaRecusada, e nao subir crua — o
+    # caminho de intencao continua funcionando sem Ollama (fallback regex), e
+    # seria confuso a pergunta fora do catalogo devolver erro de conexao.
+    try:
+        resposta = client.chat(
+            model=modelo,
+            messages=[
+                {"role": "system", "content": _prompt_sistema()},
+                {"role": "user", "content": pergunta},
+            ],
+            format="json",
+        )
+        texto = resposta["message"]["content"].strip()
+    except Exception as e:
+        raise ConsultaRecusada(
+            "Nenhuma intencao versionada cobre esta pergunta, e a consulta "
+            "livre precisa do LLM, que nao respondeu. Reformule usando um dos "
+            f"exemplos, ou verifique o Ollama (make llm-check). Detalhe: {e}",
+        ) from e
+
     if texto.startswith("```"):
         texto = "\n".join(texto.split("\n")[1:-1])
 
-    dados = json.loads(texto)
+    try:
+        dados = json.loads(texto)
+    except json.JSONDecodeError as e:
+        raise ConsultaRecusada(
+            f"O modelo nao devolveu JSON valido ao gerar a consulta: {e}",
+        ) from e
     bruto = (dados.get("cypher") or "").strip()
     motivo = (dados.get("motivo") or "").strip()
     if not bruto:

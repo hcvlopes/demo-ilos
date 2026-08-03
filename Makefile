@@ -2,16 +2,27 @@
 
 # O projeto exige Python 3.11+ (pyproject: requires-python). O `python3` do
 # macOS costuma ser o 3.9 do Command Line Tools, que nao entende `X | None`.
-# Procura o primeiro interpretador 3.11+ disponivel; cai para python3 para
-# que o guard abaixo produza uma mensagem util em vez de um traceback.
-# Sobrescreva com: make test PYTHON=.venv/bin/python
-# Ordem importa: o `python3` do PATH (ou do venv ativo) vem primeiro, porque
-# e nele que as dependencias normalmente estao instaladas. Versoes explicitas
-# so entram se o padrao for velho demais — nao adianta achar um 3.13 limpo.
-PYTHON ?= $(shell for p in python3 python python3.13 python3.12 python3.11; do \
-		command -v $$p >/dev/null 2>&1 || continue; \
-		$$p -c 'import sys; sys.exit(0 if sys.version_info[:2] >= (3, 11) else 1)' 2>/dev/null \
-			&& { echo $$p; break; }; \
+# Sobrescreva com: make test PYTHON=/caminho/para/python
+#
+# Ordem de busca, e o porque de cada posicao:
+#   1. ./.venv/bin/python  — o venv do proprio projeto, que e o que o README
+#      manda criar. Precisa vir primeiro: e o unico interpretador onde as
+#      dependencias com certeza foram instaladas para ESTE projeto.
+#   2. $VIRTUAL_ENV        — venv ativo em outro diretorio.
+#   3. python3 / python    — o padrao do PATH.
+#   4. versoes explicitas  — so se o padrao for velho demais. Um python3.13
+#      recem-instalado pelo brew esta limpo, entao vem por ultimo.
+# A expansao de VIRTUAL_ENV usa ${VAR:+...}: com a variavel vazia o candidato
+# inteiro some. Escrever "$VIRTUAL_ENV/bin/python" direto produziria
+# "/bin/python" fora de um venv — que existe em muitos Linux e pode ser
+# qualquer coisa.
+PYTHON ?= $(shell for p in ./.venv/bin/python "$${VIRTUAL_ENV:+$${VIRTUAL_ENV}/bin/python}" \
+			python3 python python3.13 python3.12 python3.11; do \
+		[ -n "$$p" ] || continue; \
+		command -v "$$p" >/dev/null 2>&1 || continue; \
+		"$$p" -c 'import sys; sys.exit(0 if sys.version_info[:2] >= (3, 11) else 1)' 2>/dev/null \
+			|| continue; \
+		echo "$$p"; break; \
 	done | head -1)
 PYTHON := $(if $(strip $(PYTHON)),$(strip $(PYTHON)),python3)
 

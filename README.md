@@ -116,10 +116,17 @@ O projeto exige **Python 3.11+**. O `python3` que vem no macOS é o 3.9 do
 Command Line Tools, que não entende a sintaxe `X | None` usada nos modelos
 Pydantic — daí o `TypeError: unsupported operand type(s) for |`.
 
-O Makefile procura sozinho o primeiro interpretador 3.11+ (`python3` primeiro,
-porque é onde as dependências normalmente estão; depois `python3.13`,
-`python3.12`, `python3.11`). Se não achar nenhum, ou se as dependências
-faltarem, ele diz o que fazer em vez de estourar um traceback.
+O Makefile procura sozinho um interpretador 3.11+, nesta ordem:
+
+1. `./.venv/bin/python` — o venv do projeto, se existir
+2. `$VIRTUAL_ENV/bin/python` — venv ativo em outro diretório
+3. `python3` / `python` do PATH
+4. `python3.13`, `python3.12`, `python3.11` explícitos
+
+O venv do projeto vem primeiro porque é o único lugar onde as dependências
+com certeza foram instaladas para este projeto: um `python3.12` recém-saído
+do Homebrew passa no teste de versão e falha no de dependências. Se nenhum
+candidato servir, o Makefile diz o que fazer em vez de estourar um traceback.
 
 Setup recomendado no macOS:
 
@@ -127,10 +134,11 @@ Setup recomendado no macOS:
 brew install python@3.12
 python3.12 -m venv .venv
 .venv/bin/pip install -e .
-make test PYTHON=.venv/bin/python
+make test
 ```
 
-Com o venv ativado (`source .venv/bin/activate`) o `PYTHON=` é dispensável.
+Criado o `.venv`, nem `PYTHON=` nem `source .venv/bin/activate` são
+necessários — o Makefile o encontra sozinho.
 
 ## Licença
 

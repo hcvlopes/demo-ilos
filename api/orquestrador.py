@@ -17,7 +17,7 @@ import os
 
 import re
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from intents.base import EnvelopeEvidencia
 from intents.registry import REGISTRY, get_intencao
@@ -48,6 +48,32 @@ class ResultadoOrquestrador(BaseModel):
     envelope: EnvelopeEvidencia
 
 
+def tipo_de_params(nome: str):
+    """Modelo Pydantic de parametros declarado por uma intencao."""
+    import inspect
+
+    inst = get_intencao(nome)
+    sig = inspect.signature(type(inst).executar)
+    return list(sig.parameters.values())[2].annotation
+
+
+# Perguntas de exemplo para as intencoes que disputam o mesmo vocabulario.
+# Sem elas o modelo confunde as tres que falam de norma: pedir o que uma
+# norma exige nao e a mesma coisa que pedir o que incide sobre um equipamento.
+_EXEMPLOS_PROMPT = {
+    "conformidade_normativa": "O que a ISO 14224 exige? / Quais equipamentos estao sujeitos a NR-12?",
+    "requisitos_equipamento": "Quais requisitos incidem sobre o EQ-MOE-001?",
+    "normas_aplicaveis": "Quais normas se aplicam ao EQ-TRE-001?",
+    "acoes_por_papel": "O que um tecnico pode fazer?",
+    "acoes_permitidas": "Quais acoes sao permitidas para o defeito DEF-001?",
+    "defeitos_abertos": "Quais defeitos estao abertos?",
+    "defeitos_resolvidos": "Quais defeitos ja foram resolvidos?",
+    "ranking_sistemas": "Qual o pior sistema em confiabilidade?",
+    "localizacao_defeito": "Qual a peca afetada pelo DEF-001?",
+    "cadeia_falha": "Mostre a cadeia de falha do DEF-901",
+}
+
+
 def _construir_prompt_sistema() -> str:
     linhas = [
         "Voce e um classificador de intencoes para um sistema de gestao de ativos industriais.",
@@ -55,19 +81,38 @@ def _construir_prompt_sistema() -> str:
         "",
         "Intencoes disponiveis:",
     ]
+    obrigatorios_por_intencao = {}
     for nome, cls in REGISTRY.items():
         inst = cls()
-        import inspect
-        sig = inspect.signature(cls.executar)
-        params = list(sig.parameters.values())
-        if len(params) >= 3:
-            param_type = params[2].annotation
-            campos = list(param_type.model_fields.keys()) if hasattr(param_type, "model_fields") else []
-        else:
-            campos = []
-        linhas.append(f"- {nome}: {inst.descricao}. Parametros: {campos}")
+        param_type = tipo_de_params(nome)
+        campos = list(param_type.model_fields.keys()) if hasattr(param_type, "model_fields") else []
+        obrigatorios = [
+            c for c, f in param_type.model_fields.items() if f.is_required()
+        ] if hasattr(param_type, "model_fields") else []
+        obrigatorios_por_intencao[nome] = obrigatorios
+
+        linha = f"- {nome}: {inst.descricao}. Parametros: {campos}"
+        if obrigatorios:
+            linha += f" (obrigatorios: {obrigatorios})"
+        exemplo = _EXEMPLOS_PROMPT.get(nome)
+        if exemplo:
+            linha += f' Exemplo: "{exemplo}"'
+        linhas.append(linha)
 
     linhas.extend([
+        "",
+        "Regras para escolher entre intencoes parecidas:",
+        "- Se a pergunta cita um codigo de norma (NR-12, NBR 5410, ISO 14224) e pergunta",
+        "  o que ela exige ou a quem se aplica, use conformidade_normativa e coloque o",
+        "  codigo em norma_id.",
+        "- Se a pergunta cita um equipamento e pergunta o que incide sobre ele, use",
+        "  requisitos_equipamento ou normas_aplicaveis com equipamento_id.",
+        "",
+        "Regras para os parametros:",
+        "- Preencha TODO parametro obrigatorio da intencao escolhida.",
+        "- Nunca use null. Se a pergunta nao traz o valor de um parametro obrigatorio,",
+        "  escolha outra intencao ou responda desconhecida.",
+        "- Use exatamente os nomes de parametro listados acima.",
         "",
         "Responda APENAS com JSON valido no formato:",
         '{"intencao": "<nome>", "parametros": {<chave>: <valor>}}',
@@ -78,6 +123,28 @@ def _construir_prompt_sistema() -> str:
         "Nao inclua explicacoes, apenas o JSON.",
     ])
     return "\n".join(linhas)
+
+
+def sanitizar_parametros(parametros: dict, param_type) -> dict:
+    """Limpa o que o LLM devolveu antes de tipar.
+
+    O modelo erra de formas previsiveis: manda `null` no lugar de omitir,
+    inventa chave que a intencao nao declara, devolve numero onde se espera
+    texto. Nada disso deveria virar 500 na cara do usuario.
+    """
+    if not hasattr(param_type, "model_fields"):
+        return dict(parametros)
+
+    campos = param_type.model_fields
+    limpo = {}
+    for chave, valor in (parametros or {}).items():
+        if chave not in campos or valor is None:
+            continue
+        anotacao = campos[chave].annotation
+        if anotacao is str and not isinstance(valor, str):
+            valor = str(valor)
+        limpo[chave] = valor
+    return limpo
 
 
 # Extratores de parametro. Cada um sabe reconhecer um tipo de referencia na
@@ -392,9 +459,28 @@ def classificar_intencao(
             pergunta, f"LLM classificou intencao inexistente: '{intencao}'.",
         )
 
+    if intencao == "desconhecida":
+        return _classificar_fallback(pergunta, "LLM nao reconheceu a intencao.")
+
+    # Os parametros do LLM tem que sobreviver a tipagem da intencao ANTES de
+    # sair daqui. Se o modelo devolve equipamento_id=null, a ValidationError
+    # aconteceria la na execucao e chegaria ao usuario como 500 com um dump do
+    # pydantic. Aqui isso vira degradacao para o regex, que costuma acertar
+    # justamente as perguntas em que o LLM se confundiu de intencao.
+    param_type = tipo_de_params(intencao)
+    parametros = sanitizar_parametros(dados.get("parametros", {}) or {}, param_type)
+    try:
+        param_type(**parametros)
+    except ValidationError as e:
+        faltando = ", ".join(str(err["loc"][0]) for err in e.errors() if err.get("loc"))
+        return _classificar_fallback(
+            pergunta,
+            f"LLM escolheu '{intencao}' sem preencher: {faltando or 'parametros validos'}.",
+        )
+
     return ClassificacaoIntencao(
         intencao=intencao,
-        parametros=dados.get("parametros", {}) or {},
+        parametros=parametros,
         origem="llm",
     )
 
@@ -405,13 +491,23 @@ def executar_intencao(
 ) -> EnvelopeEvidencia:
     """Resolve e executa a intencao classificada."""
     inst = get_intencao(classificacao.intencao)
+    param_type = tipo_de_params(classificacao.intencao)
+    parametros = sanitizar_parametros(classificacao.parametros, param_type)
 
-    import inspect
-    sig = inspect.signature(type(inst).executar)
-    params_list = list(sig.parameters.values())
-    param_type = params_list[2].annotation
+    try:
+        params_tipados = param_type(**parametros)
+    except ValidationError as e:
+        # Ultimo cinto de seguranca. A classificacao ja valida os parametros,
+        # mas um chamador direto pode passar qualquer coisa — e o dump do
+        # pydantic nao diz nada a quem esta olhando a tela.
+        faltando = sorted(
+            {str(err["loc"][0]) for err in e.errors() if err.get("loc")},
+        )
+        raise ValueError(
+            f"A intencao '{classificacao.intencao}' precisa de "
+            f"{', '.join(faltando) or 'parametros validos'}, que a pergunta nao informou.",
+        ) from e
 
-    params_tipados = param_type(**classificacao.parametros)
     return inst.executar(session, params_tipados)
 
 

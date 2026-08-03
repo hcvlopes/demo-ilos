@@ -125,7 +125,13 @@ def pergunta(req: PerguntaRequest):
         with _driver.session() as session:
             envelope = executar_intencao(classificacao, session)
     except KeyError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        # KeyError chega com aspas do repr; a mensagem ja e escrita para o
+        # usuario final e nao precisa delas.
+        raise HTTPException(status_code=404, detail=str(e).strip('"'))
+    except ValueError as e:
+        # Parametro faltando ou invalido: e a pergunta que esta incompleta,
+        # nao o servidor que quebrou.
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro na execucao: {e}")
 

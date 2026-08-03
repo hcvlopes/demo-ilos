@@ -16,6 +16,7 @@ import pytest
 
 from api.orquestrador import (
     ClassificacaoIntencao,
+    _construir_prompt_sistema,
     classificar_intencao,
     criar_cliente_ollama,
     verificar_ollama,
@@ -254,8 +255,14 @@ class TestVerificarOllama:
 class TestContratoDeSeguranca:
     """A regra inviolavel: o LLM nunca escreve Cypher."""
 
-    def test_cypher_injetado_pelo_llm_e_descartado_na_tipagem(self, stub_ollama):
-        """Se o LLM devolver uma query, ela morre na fronteira tipada."""
+    def test_cypher_injetado_pelo_llm_nao_sobrevive_a_classificacao(self, stub_ollama):
+        """Se o LLM devolver uma query, ela nao passa da classificacao.
+
+        A barreira e dupla e este teste cobre as duas. A saneadora descarta
+        toda chave que a intencao nao declara, entao o Cypher nem chega ao
+        resultado da classificacao; e mesmo se chegasse, a tipagem Pydantic
+        nao o carregaria adiante.
+        """
         host, stub = stub_ollama
         stub.resposta_chat = json.dumps({
             "intencao": "explicar_defeito",
@@ -264,22 +271,119 @@ class TestContratoDeSeguranca:
         client = criar_cliente_ollama(host)
 
         c = classificar_intencao("me explique o defeito DEF-001", client=client)
-        assert "query" in c.parametros
 
-        # A intencao so aceita seus campos declarados; o extra nao sobrevive.
-        import inspect
+        # Primeira barreira: a chave nao declarada some na saneadora.
+        assert "query" not in c.parametros
+        assert c.parametros == {"defeito_id": "DEF-001"}
 
-        from intents.registry import get_intencao
+        # Segunda barreira: mesmo forcando a query de volta, a tipagem descarta.
+        from api.orquestrador import tipo_de_params
 
-        inst = get_intencao(c.intencao)
-        sig = inspect.signature(type(inst).executar)
-        param_type = list(sig.parameters.values())[2].annotation
-
-        tipados = param_type(**c.parametros)
+        param_type = tipo_de_params(c.intencao)
+        tipados = param_type(defeito_id="DEF-001", query="MATCH (n) DETACH DELETE n")
         assert not hasattr(tipados, "query")
-        assert "query" not in tipados.model_dump()
         assert tipados.model_dump() == {"defeito_id": "DEF-001"}
 
     def test_classificacao_tem_apenas_campos_declarados(self):
         campos = set(ClassificacaoIntencao.model_fields.keys())
         assert campos == {"intencao", "parametros", "origem", "motivo_fallback"}
+
+
+class TestParametrosInvalidosDoLLM:
+    """Parametro que nao tipa nao pode virar 500 na cara do usuario.
+
+    O caso real: perguntado "O que a ISO 14224 exige?", o llama3.1 respondeu
+    `requisitos_equipamento` com `equipamento_id: null`. Isso estourava
+    ValidationError na execucao e chegava a tela como um dump do pydantic.
+    """
+
+    def test_param_nulo_degrada_para_regex(self, stub_ollama):
+        host, stub = stub_ollama
+        stub.resposta_chat = (
+            '{"intencao": "requisitos_equipamento", "parametros": {"equipamento_id": null}}'
+        )
+        client = criar_cliente_ollama(host)
+
+        c = classificar_intencao("O que a ISO 14224 exige?", client=client)
+
+        assert c.origem == "fallback"
+        assert "equipamento_id" in c.motivo_fallback
+        # E o regex acerta a intencao que o LLM errou.
+        assert c.intencao == "conformidade_normativa"
+        assert c.parametros["norma_id"] == "ISO 14224:2016"
+
+    def test_param_obrigatorio_ausente_degrada(self, stub_ollama):
+        host, stub = stub_ollama
+        stub.resposta_chat = '{"intencao": "explicar_defeito", "parametros": {}}'
+        client = criar_cliente_ollama(host)
+
+        c = classificar_intencao("me explique o defeito DEF-001", client=client)
+
+        assert c.origem == "fallback"
+        assert c.intencao == "explicar_defeito"
+        assert c.parametros["defeito_id"] == "DEF-001"
+
+    def test_chave_inventada_e_descartada(self, stub_ollama):
+        """Parametro que a intencao nao declara nao impede a classificacao."""
+        host, stub = stub_ollama
+        stub.resposta_chat = json.dumps({
+            "intencao": "explicar_defeito",
+            "parametros": {"defeito_id": "DEF-001", "inventado": "x"},
+        })
+        client = criar_cliente_ollama(host)
+
+        c = classificar_intencao("me explique o defeito DEF-001", client=client)
+
+        assert c.origem == "llm"
+        assert c.parametros == {"defeito_id": "DEF-001"}
+
+    def test_numero_onde_se_espera_texto_e_convertido(self, stub_ollama):
+        host, stub = stub_ollama
+        stub.resposta_chat = '{"intencao": "explicar_defeito", "parametros": {"defeito_id": 123}}'
+        client = criar_cliente_ollama(host)
+
+        c = classificar_intencao("defeito 123", client=client)
+
+        assert c.origem == "llm"
+        assert c.parametros == {"defeito_id": "123"}
+
+    def test_desconhecida_do_llm_ainda_tenta_o_regex(self, stub_ollama):
+        """O regex conhece formulacoes que o modelo pode nao reconhecer."""
+        host, stub = stub_ollama
+        stub.resposta_chat = '{"intencao": "desconhecida", "parametros": {}}'
+        client = criar_cliente_ollama(host)
+
+        c = classificar_intencao("Quais equipamentos estao sujeitos a NR-12?", client=client)
+
+        assert c.origem == "fallback"
+        assert c.intencao == "conformidade_normativa"
+
+
+class TestErroDeParametroNaExecucao:
+    def test_executar_com_param_faltando_levanta_mensagem_legivel(self):
+        from api.orquestrador import executar_intencao
+
+        c = ClassificacaoIntencao(intencao="explicar_defeito", parametros={})
+        with pytest.raises(ValueError) as exc:
+            executar_intencao(c, session=None)
+        mensagem = str(exc.value)
+        assert "defeito_id" in mensagem
+        assert "pydantic" not in mensagem.lower()
+
+
+class TestPromptDesambigua:
+    """O prompt precisa distinguir as tres intencoes que falam de norma."""
+
+    def test_declara_parametros_obrigatorios(self):
+        prompt = _construir_prompt_sistema()
+        assert "obrigatorios" in prompt
+
+    def test_proibe_null(self):
+        prompt = _construir_prompt_sistema()
+        assert "Nunca use null" in prompt
+
+    def test_ensina_a_escolher_entre_as_intencoes_de_norma(self):
+        prompt = _construir_prompt_sistema()
+        assert "conformidade_normativa" in prompt
+        assert "norma_id" in prompt
+        assert "ISO 14224" in prompt

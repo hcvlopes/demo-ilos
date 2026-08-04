@@ -18,6 +18,11 @@ from intents.navegacao.explicar_processo import ExplicarProcesso
 from intents.navegacao.listar_equipamentos_ativo import ListarEquipamentosAtivo
 from intents.navegacao.resumo_edificacao import ResumoEdificacao
 from intents.navegacao.resumo_sistema import ResumoSistema
+from intents.processo.cadeia_processo import CadeiaProcesso
+from intents.processo.exposicao_processo import ExposicaoProcesso
+from intents.processo.gargalo_processo import GargaloProcesso
+from intents.processo.impacto_funcao import ImpactoFuncao
+from intents.processo.indicadores_processo import IndicadoresProcesso
 from intents.transversais.acoes_permitidas import AcoesPermitidas
 from intents.transversais.acoes_por_papel import AcoesPorPapel
 from intents.transversais.cadeia_falha import CadeiaFalha
@@ -61,6 +66,11 @@ REGISTRY: dict[str, type] = {
     "carga_centro_trabalho": CargaCentroTrabalho,
     "escopo_grupo_planejamento": EscopoGrupoPlanejamento,
     "ranking_sistemas": RankingSistemas,
+    "cadeia_processo": CadeiaProcesso,
+    "gargalo_processo": GargaloProcesso,
+    "impacto_funcao": ImpactoFuncao,
+    "indicadores_processo": IndicadoresProcesso,
+    "exposicao_processo": ExposicaoProcesso,
 }
 
 

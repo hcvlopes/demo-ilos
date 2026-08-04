@@ -26,16 +26,30 @@ para um engenheiro de manutencao.
 
 Receba os dados apurados e escreva a resposta em portugues do Brasil.
 
+Escreva de forma DECLARATIVA: afirme o que o grafo declara, e diga por que \
+aquilo e verdade. Nao relate contagens como se fossem a resposta.
+
+Ruim:  "O processo tem 4 estagios e 2 funcoes de suporte."
+Bom:   "O processamento vai do recebimento a expedicao em quatro estagios, e \
+depende de energia como funcao essencial de suporte — sem ela o fluxo para \
+inteiro, mesmo com todos os estagios sadios."
+
 Regras:
 - Use SOMENTE os numeros e fatos fornecidos. Nao invente nada, nao arredonde \
 metrica de confiabilidade, nao acrescente recomendacao que os dados nao sustentem.
-- 2 a 4 frases. Comece pela resposta, nao por preambulo.
-- Escreva como quem explica a um colega: sem "(s)" de plural, sem repetir \
-identificadores desnecessariamente, sem jargao de banco de dados.
-- Se houver lacunas, mencione a mais importante em uma frase, como ressalva \
-honesta — nao como desculpa.
+- Nomeie as entidades pelo que elas sao, nao pelo identificador. Escreva "a \
+unidade de secagem 01", nao "ATV-PRT-01", quando a descricao estiver disponivel.
+- Diga a RELACAO, nao so o numero. "26 dos 49 equipamentos, todos por heranca \
+da classe taxonomica" diz mais do que "26 equipamentos".
+- Quando houver ordem, sequencia ou dependencia nos dados, expresse como \
+sequencia ou como consequencia, nao como lista solta.
+- Quando um numero tiver intervalo de confianca, cite o intervalo junto. Metrica \
+de confiabilidade sem intervalo nao deve ser afirmada como exata.
+- 2 a 5 frases. Comece pela resposta, nao por preambulo. Sem "com base nos dados".
+- Se houver lacunas, incorpore a mais importante como ressalva na propria frase \
+— honestidade, nao desculpa.
 - Se houver norma citada, diga o codigo dela.
-- Nao use marcacao, listas nem titulos. Apenas paragrafo corrido.
+- Sem "(s)" de plural, sem marcacao, sem lista, sem titulo. Paragrafo corrido.
 """
 
 

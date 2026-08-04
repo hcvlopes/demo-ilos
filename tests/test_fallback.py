@@ -218,6 +218,19 @@ CORPUS = [
     # historico_equipamento
     ("qual o historico do EQ-TRE-001?", "historico_equipamento"),
     ("o EQ-MOE-001 ja falhou antes", "historico_equipamento"),
+
+    # --- processo (migration 003) ---
+    ("qual a sequencia do processo PO-001?", "cadeia_processo"),
+    ("como funciona o processo PO-002?", "cadeia_processo"),
+    ("quais os estagios do processo PO-001", "cadeia_processo"),
+    ("qual o gargalo do processo PO-001?", "gargalo_processo"),
+    ("qual o estagio critico do PO-002", "gargalo_processo"),
+    ("o que acontece se a funcao FUN-REC parar?", "impacto_funcao"),
+    ("qual o impacto da funcao FUN-UTL?", "impacto_funcao"),
+    ("os indicadores do PO-001 atendem a meta?", "indicadores_processo"),
+    ("qual o mtbf do processo PO-002", "indicadores_processo"),
+    ("qual o regime de operacao do PO-001?", "exposicao_processo"),
+    ("quantas horas de operacao tem o PO-002?", "exposicao_processo"),
 ]
 
 

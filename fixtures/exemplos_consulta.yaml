@@ -368,3 +368,66 @@ exemplos:
       MATCH (e:Equipamento)-[:TEM_REGISTRO]->(r:RegistroCondicao)
       RETURN e.descricao AS equipamento, r.valor AS valor, r.timestamp_horas AS horas
       ORDER BY r.timestamp_horas LIMIT 30
+
+  # ------------------------------------------------------------------ processo
+  # A migration 003 deu ordem, criticidade e posicao a aresta REQUER, e regime
+  # ao processo. Estes exemplos ensinam a usar propriedade DE ARESTA — que e
+  # onde o modelo mais escorrega, porque tende a procurar tudo no no.
+  - pergunta: Qual a sequencia de estagios do processo PO-001?
+    categoria: processo
+    cypher: |
+      MATCH (p:ProcessoOperacional {id: 'PO-001'})-[r:REQUER]->(f:Funcao)
+      WHERE r.posicao = 'fluxo'
+      RETURN r.ordem AS estagio, f.descricao AS funcao, r.criticidade AS criticidade
+      ORDER BY r.ordem, f.id LIMIT 20
+
+  - pergunta: Quais funcoes sao apenas suporte, fora do fluxo do processo?
+    categoria: processo
+    cypher: |
+      MATCH (p:ProcessoOperacional)-[r:REQUER]->(f:Funcao)
+      WHERE r.posicao = 'suporte'
+      RETURN p.descricao AS processo, f.descricao AS funcao, r.criticidade AS criticidade
+      ORDER BY p.id LIMIT 20
+
+  - pergunta: Que funcoes sao essenciais e nao tem paralelo no processo?
+    categoria: processo
+    cypher: |
+      MATCH (p:ProcessoOperacional)-[r:REQUER]->(f:Funcao)
+      WHERE r.criticidade = 'essencial' AND r.posicao = 'fluxo'
+      WITH p, r.ordem AS ordem, collect(f.descricao) AS funcoes
+      WHERE size(funcoes) = 1
+      RETURN p.descricao AS processo, ordem AS estagio, funcoes[0] AS funcao_unica
+      ORDER BY p.id, ordem LIMIT 20
+
+  - pergunta: Qual o regime de operacao de cada processo e quantas horas por ano?
+    categoria: processo
+    cypher: |
+      MATCH (p:ProcessoOperacional)
+      RETURN p.descricao AS processo, p.regime AS regime,
+             p.horas_operacao_ano AS horas_operacao,
+             p.horas_calendario_ano AS horas_calendario
+      ORDER BY p.id LIMIT 10
+
+  - pergunta: Os indicadores estao atendendo a meta?
+    categoria: processo
+    cypher: |
+      MATCH (i:Indicador)-[:MEDE]->(p:ProcessoOperacional)
+      RETURN p.descricao AS processo, i.descricao AS indicador,
+             i.meta AS meta, i.valor_atual AS valor_atual, i.unidade AS unidade
+      ORDER BY p.id, i.id LIMIT 20
+
+  - pergunta: Que processo depende de outro processo?
+    categoria: processo
+    cypher: |
+      MATCH (a:ProcessoOperacional)-[r:PRECEDE]->(b:ProcessoOperacional)
+      RETURN a.descricao AS antes, b.descricao AS depois, r.natureza AS natureza
+      LIMIT 10
+
+  - pergunta: Quais estagios do processo tem mais equipamentos?
+    categoria: processo
+    cypher: |
+      MATCH (p:ProcessoOperacional)-[r:REQUER]->(f:Funcao)<-[:DESEMPENHA]-(a:Ativo)
+      MATCH (a)<-[:PERTENCE]-(eq:Equipamento)
+      WHERE r.posicao = 'fluxo'
+      RETURN p.descricao AS processo, r.ordem AS estagio, count(DISTINCT eq) AS equipamentos
+      ORDER BY equipamentos DESC LIMIT 20

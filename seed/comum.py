@@ -170,9 +170,20 @@ def criar_indicadores(session) -> int:
         "MATCH (p:ProcessoOperacional) RETURN p.id AS id, p.descricao AS desc",
     ))
 
+    # A meta e parametro declarado do cenario, como `periodicidade_dias` do
+    # plano — nao e medicao. `valor_atual` e que sai do grafo (medir_indicadores).
+    #
+    # A meta de MTBF vale 50 h, nao 1200: o MTBF de um PROCESSO tratado como
+    # serie e o inverso da soma das taxas de dezenas de equipamentos, entao cai
+    # na casa das dezenas de horas. A primeira versao usava 1200 h, que e escala
+    # de equipamento isolado, e deixava todo processo eternamente "abaixo da
+    # meta" — indicador que nunca muda de cor nao informa nada.
+    #
+    # 50 h foi escolhido de proposito num ponto em que um processo atende e o
+    # outro nao, para a demo mostrar os dois estados.
     modelos = [
         ("DISP", "Disponibilidade operacional", "%", 95.0),
-        ("MTBF", "Tempo medio entre falhas", "horas", 1200.0),
+        ("MTBF", "Tempo medio entre falhas do processo", "horas", 50.0),
     ]
 
     total = 0
@@ -447,3 +458,221 @@ def criar_defeitos_resolvidos(session, defeitos: list[dict]) -> int:
         )
 
     return len(defeitos)
+
+
+# ---------------------------------------------------------------------------
+# Processo operacional declarativo (migration 003)
+# ---------------------------------------------------------------------------
+#
+# A sequencia de estagios e conhecimento de dominio da planta, entao vive no
+# spec do setor — como ALIMENTA e REDUNDA_COM ja viviam. O que e comum aos
+# dois setores e a MECANICA: como a ordem, a criticidade e a posicao viram
+# propriedade de aresta.
+#
+# Propriedades de REQUER, e a pergunta que cada uma responde:
+#   ordem       — qual a sequencia do processo; onde esta o gargalo
+#   criticidade — o que PARA o processo (essencial) contra o que DEGRADA
+#   posicao     — 'fluxo' (esta na sequencia) ou 'suporte' (transversal)
+#
+# Duas funcoes com a mesma `ordem` e posicao 'fluxo' sao estagios PARALELOS:
+# perder uma degrada, perder as duas para. A intencao de impacto usa isso.
+
+PROCESSO_AGRO = {
+    "id": "PO-001",
+    # Vem de PERFIL_SAFRA_AGRO.total_anual, nao de estimativa: 5840 h de
+    # operacao contra 8760 de calendario. Quem calculasse lambda por hora de
+    # calendario subestimaria a taxa em 1,50x — e a regra 7 existe por isso.
+    "regime": "sazonal",
+    "horas_operacao_ano": 5840,
+    "horas_calendario_ano": 8760,
+    "razao_pico_vale": 3.6,
+    "criticidade": "alta",
+    "estagios": [
+        {"ordem": 1, "criticidade": "essencial", "funcoes": ["FUN-REC"]},
+        {"ordem": 2, "criticidade": "essencial", "funcoes": ["FUN-PRT-01", "FUN-PRT-02"]},
+        {"ordem": 3, "criticidade": "essencial", "funcoes": ["FUN-ARM-01", "FUN-ARM-02"]},
+        {"ordem": 4, "criticidade": "essencial", "funcoes": ["FUN-EXP"]},
+    ],
+    "suporte": [
+        {"criticidade": "essencial", "funcoes": ["FUN-ENR"]},
+        {"criticidade": "importante", "funcoes": ["FUN-UTL"]},
+    ],
+}
+
+PROCESSO_ELETRICO = {
+    "id": "PO-002",
+    # PERFIL_UNIFORME: 8760 h/ano. Operacao continua, entao hora de operacao e
+    # hora de calendario coincidem — e justamente o contraste que mostra por
+    # que a distincao importa no agro.
+    "regime": "continuo",
+    "horas_operacao_ano": 8760,
+    "horas_calendario_ano": 8760,
+    "razao_pico_vale": 1.0,
+    "criticidade": "alta",
+    "estagios": [
+        {"ordem": 1, "criticidade": "essencial", "funcoes": ["FUN-TRN-01", "FUN-TRN-02"]},
+        {"ordem": 2, "criticidade": "essencial", "funcoes": ["FUN-PRO"]},
+        {"ordem": 3, "criticidade": "essencial", "funcoes": ["FUN-DST-01", "FUN-DST-02"]},
+    ],
+    "suporte": [
+        {"criticidade": "importante", "funcoes": ["FUN-CTR"]},
+        {"criticidade": "auxiliar", "funcoes": ["FUN-AXL"]},
+    ],
+}
+
+# Cadeia entre processos. Existe uma so, e ela e real no cenario: o processo
+# eletrico entrega energia, e o agro declara `FUN-ENR` como funcao essencial de
+# suporte. Nao inventei elo para nao deixar a aresta PRECEDE vazia — se um dia
+# nao houver dependencia real entre processos, a aresta fica vazia mesmo.
+PRECEDENCIA_PROCESSOS = [
+    {"antes": "PO-002", "depois": "PO-001", "natureza": "fornecimento de energia"},
+]
+
+
+def enriquecer_processo(session, spec: dict) -> int:
+    """Declara regime, sequencia de estagios e criticidade das funcoes."""
+    session.run(
+        """
+        MATCH (p:ProcessoOperacional {id: $pid})
+        SET p.regime = $regime,
+            p.horas_operacao_ano = $h_op,
+            p.horas_calendario_ano = $h_cal,
+            p.razao_pico_vale = $razao,
+            p.criticidade = $crit
+        """,
+        parameters={
+            "pid": spec["id"], "regime": spec["regime"],
+            "h_op": spec["horas_operacao_ano"],
+            "h_cal": spec["horas_calendario_ano"],
+            "razao": spec["razao_pico_vale"], "crit": spec["criticidade"],
+        },
+    )
+
+    total = 0
+    for estagio in spec.get("estagios", []):
+        for funcao in estagio["funcoes"]:
+            session.run(
+                """
+                MATCH (p:ProcessoOperacional {id: $pid})-[r:REQUER]->(f:Funcao {id: $fid})
+                SET r.ordem = $ordem, r.criticidade = $crit, r.posicao = 'fluxo'
+                """,
+                parameters={
+                    "pid": spec["id"], "fid": funcao,
+                    "ordem": estagio["ordem"], "crit": estagio["criticidade"],
+                },
+            )
+            total += 1
+
+    for suporte in spec.get("suporte", []):
+        for funcao in suporte["funcoes"]:
+            session.run(
+                """
+                MATCH (p:ProcessoOperacional {id: $pid})-[r:REQUER]->(f:Funcao {id: $fid})
+                SET r.ordem = 0, r.criticidade = $crit, r.posicao = 'suporte'
+                """,
+                parameters={
+                    "pid": spec["id"], "fid": funcao, "crit": suporte["criticidade"],
+                },
+            )
+            total += 1
+
+    return total
+
+
+def ligar_precedencia_processos(session) -> int:
+    """Cadeia entre processos, onde ela existe de fato no cenario."""
+    total = 0
+    for elo in PRECEDENCIA_PROCESSOS:
+        r = session.run(
+            """
+            MATCH (a:ProcessoOperacional {id: $antes})
+            MATCH (b:ProcessoOperacional {id: $depois})
+            MERGE (a)-[p:PRECEDE]->(b)
+            SET p.natureza = $natureza
+            RETURN count(p) AS c
+            """,
+            parameters=elo,
+        ).single()
+        total += (r["c"] if r else 0)
+    return total
+
+
+def medir_indicadores(session) -> int:
+    """Preenche `valor_atual` dos indicadores a partir do grafo.
+
+    Nao e valor arbitrado: cada indicador tem uma formula, gravada na
+    propriedade `formula` para ficar auditavel. Indicador com meta e sem
+    medicao era decoracao — "esta atendendo a meta?" nao tinha resposta.
+
+    As contagens vao em consultas separadas de proposito. A primeira versao
+    usava `count(DISTINCT CASE WHEN (:Defeito)-[:DETECTADO_EM]->(eq) THEN eq END)`
+    e devolvia 28 de 28 equipamentos com defeito, zerando a disponibilidade: o
+    padrao dentro do CASE nao filtra por equipamento como parece. Duas
+    consultas sao mais longas e dizem a verdade.
+    """
+    medidos = 0
+
+    processos = list(session.run(
+        "MATCH (p:ProcessoOperacional) RETURN p.id AS pid",
+    ))
+
+    for proc in processos:
+        pid = proc["pid"]
+
+        total = contar_no_processo(session, pid, """
+            MATCH (p:ProcessoOperacional {id: $pid})-[:REQUER]->(:Funcao)
+                  <-[:DESEMPENHA]-(:Ativo)<-[:PERTENCE]-(eq:Equipamento)
+            RETURN count(DISTINCT eq) AS c
+        """)
+        com_defeito = contar_no_processo(session, pid, """
+            MATCH (p:ProcessoOperacional {id: $pid})-[:REQUER]->(:Funcao)
+                  <-[:DESEMPENHA]-(:Ativo)<-[:PERTENCE]-(eq:Equipamento)
+            MATCH (d:Defeito)-[:DETECTADO_EM]->(eq)
+            WHERE d.status = 'aberto'
+            RETURN count(DISTINCT eq) AS c
+        """)
+
+        if total:
+            valor = round(100.0 * (total - com_defeito) / total, 2)
+            session.run(
+                """
+                MATCH (i:Indicador {id: $iid})
+                SET i.valor_atual = $valor,
+                    i.formula = 'equipamentos sem defeito aberto / equipamentos do processo'
+                """,
+                parameters={"iid": f"IND-{pid}-DISP", "valor": valor},
+            )
+            medidos += 1
+
+        # MTBF do processo tratado como serie: 1 / soma das taxas das classes
+        # dos equipamentos que o compoem, em horas de OPERACAO (regra 7).
+        r = session.run(
+            """
+            MATCH (p:ProcessoOperacional {id: $pid})-[:REQUER]->(:Funcao)
+                  <-[:DESEMPENHA]-(:Ativo)<-[:PERTENCE]-(eq:Equipamento)
+            MATCH (eq)-[:CLASSIFICADO_COMO]->(ct:ClasseTaxonomia)-[:TEM_METRICA]->(m:MetricaConfiabilidade)
+            RETURN sum(m.lambda_hat) AS lambda_total
+            """,
+            parameters={"pid": pid},
+        ).single()
+        lam = r["lambda_total"] if r else None
+        if lam:
+            session.run(
+                """
+                MATCH (i:Indicador {id: $iid})
+                SET i.valor_atual = $valor,
+                    i.formula = '1 / soma(lambda_hat das classes do processo), em horas de operacao'
+                """,
+                parameters={"iid": f"IND-{pid}-MTBF", "valor": round(1.0 / float(lam), 1)},
+            )
+            medidos += 1
+
+    return medidos
+
+
+def contar_no_processo(session, pid: str, travessia: str) -> int:
+    """Contagem parametrizada por processo, devolvendo 0 sem linha."""
+    registro = session.run(travessia, parameters={"pid": pid}).single()
+    if registro is None or registro["c"] is None:
+        return 0
+    return int(registro["c"])

@@ -306,6 +306,48 @@ _REGRAS_FALLBACK = [
         ),
         "escopo_grupo_planejamento", "grupo_id", _extrair_id),
 
+    # --- Processo: vem antes de "risco" e de "explicar processo", porque
+    # "gargalo do processo" tem que cair em gargalo_processo, nao na regra
+    # generica de risco. ---
+    (
+        (
+            r"gargalo|estagio\s+cr[ií]tic|ponto\s+fraco|elo\s+mais\s+fraco"
+            r"|estagio\s+de\s+maior\s+risco"
+        ),
+        "gargalo_processo", "processo_id", _extrair_id,
+    ),
+    (
+        (
+            r"(?:cadeia|sequ[eê]ncia|etapas?|estagios?|fluxo)\s+d[eo]\s+processo"
+            r"|processo.*(?:sequ[eê]ncia|estagios?|fluxo|passo\s+a\s+passo)"
+            r"|como\s+funciona\s+o\s+processo"
+        ),
+        "cadeia_processo", "processo_id", _extrair_id,
+    ),
+    (
+        (
+            r"(?:se|caso)\s+.*\bfun[çc][aã]o\b.*\bpar(?:ar|e)\b"
+            r"|impacto\s+d[ae]\s+fun[çc][aã]o|fun[çc][aã]o.*\bimpacto\b"
+            r"|o\s+que\s+acontece\s+se\s+.*\bfun[çc]"
+            r"|\bFUN-[A-Z0-9-]+\b"
+        ),
+        "impacto_funcao", "funcao_id", _extrair_id,
+    ),
+    (
+        (
+            r"indicador.*(?:meta|atend|desempenh)|meta.*indicador"
+            r"|kpi|disponibilidade\s+operacional|mtbf"
+        ),
+        "indicadores_processo", "processo_id", _extrair_id,
+    ),
+    (
+        (
+            r"regime\s+de\s+opera|sazonal|hora\s+de\s+opera|horas\s+de\s+opera"
+            r"|exposi[çc][aã]o|calendario|safra"
+        ),
+        "exposicao_processo", "processo_id", _extrair_id,
+    ),
+
     # --- Comparacao e risco ---
     (
         (

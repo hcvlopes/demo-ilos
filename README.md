@@ -42,7 +42,7 @@ make seed-eletrico
 make serve
 # Acesse http://localhost:8000
 
-# Rodar testes (745 testes offline)
+# Rodar testes (812 testes offline)
 make test
 ```
 
@@ -66,7 +66,7 @@ Essa degradação nunca é silenciosa:
 
 Caminho híbrido; a resposta declara qual dos dois respondeu.
 
-**1. Intenção versionada (preferencial).** Se alguma das 27 intenções de
+**1. Intenção versionada (preferencial).** Se alguma das 32 intenções de
 `intents/` cobre a pergunta, é ela que responde. O LLM só classifica e
 preenche parâmetros tipados; a travessia é código revisado e testado. Os
 parâmetros são validados antes de executar — parâmetro não declarado é
@@ -93,13 +93,13 @@ Para voltar ao comportamento estrito de só responder por intenção versionada:
 ### Corpus de exemplos
 
 O prompt do gerador de Cypher carrega exemplos de
-`fixtures/exemplos_consulta.yaml` — 46 pares pergunta/consulta em oito
+`fixtures/exemplos_consulta.yaml` — 53 pares pergunta/consulta em nove
 categorias. Não vão todos: `api/exemplos.py` escolhe os mais próximos da
 pergunta por sobreposição de palavras, porque despejar o corpus inteiro
 gastaria contexto que o modelo usaria melhor raciocinando.
 
 **Todo exemplo foi executado contra o grafo semeado.** `make exemplos-validar`
-roda os 46 e reprova o que não passar na guarda, não executar, ou executar e
+roda os 53 e reprova o que não passar na guarda, não executar, ou executar e
 não retornar linha. Esse terceiro critério é o que pega erro sutil: um Cypher
 sintaticamente válido que devolve vazio, porque errou o sentido de uma aresta,
 ensinaria o modelo a escrever consulta que não responde nada.
@@ -117,6 +117,39 @@ que existem na ontologia.
 (`api/narrador.py`). O narrador **não tem acesso ao grafo** — recebe só o
 envelope já montado, então não tem de onde inventar número, e o painel ao
 lado mostra os valores apurados. Sem LLM, a narrativa é a afirmação original.
+
+## Processo operacional
+
+O processo era `{id, descricao}` com um saco plano de funções penduradas por
+`REQUER`. Dava para contar, não para ordenar — e perguntar sequência, gargalo
+ou "o que para o processo" não tinha resposta porque nada disso estava
+declarado. A **migration 003** mudou isso:
+
+| O que passou a ser declarado | Pergunta que passou a ter resposta |
+|---|---|
+| `REQUER.ordem` | Qual a sequência de estágios; onde está o gargalo |
+| `REQUER.criticidade` | O que **para** o processo contra o que **degrada** |
+| `REQUER.posicao` | O que está no fluxo contra o que é suporte transversal |
+| `Processo.regime` + `horas_operacao_ano` | Por que λ por hora de calendário erra, e por quanto |
+| `Indicador.valor_atual` + `formula` | O indicador atende a meta, e como foi medido |
+| `Processo -PRECEDE-> Processo` | Que processo depende de outro |
+
+Duas funções com a **mesma `ordem`** são estágios paralelos: perder uma
+degrada, perder as duas para. As intenções usam isso para separar interrupção
+de degradação, em vez de tratar toda perda como igual.
+
+A criticidade é propriedade da **relação**, não da função: a mesma função pode
+ser essencial num processo e auxiliar em outro. Por isso ela vive na aresta e
+não no nó — foi também o motivo de não criar um nó `EstagioProcesso`, que
+diria menos e custaria mais.
+
+`horas_operacao_ano` vem do perfil de Poisson do seeder, não de estimativa: o
+processo agro opera **5.840 h/ano** contra 8.760 de calendário. Quem calculasse
+λ por hora de calendário subestimaria a taxa em **1,50×** — a regra 7 deixou de
+ser convenção de código e virou fato consultável.
+
+As cinco intenções de processo: `cadeia_processo`, `gargalo_processo`,
+`impacto_funcao`, `indicadores_processo`, `exposicao_processo`.
 
 ### Diagnóstico
 
@@ -145,7 +178,7 @@ seed/          — Seeders agro e elétrico (Poisson não-homogêneo)
 fixtures/      — ISO 14224 (modos, causas, mecanismos, classes taxonômicas)
 vocab/         — Perfis setoriais (vocabulário resolvido em render time)
 web/           — SPA self-contained (chat + painel de evidência)
-tests/         — 745 testes offline
+tests/         — 812 testes offline
 docs/          — Decisões, progresso, ontologia
 ```
 

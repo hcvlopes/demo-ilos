@@ -826,6 +826,8 @@ def seed() -> None:
     migration_001.migrate()
     migration_002 = importlib.import_module("ontology.migrations.002_acao_permitida")
     migration_002.migrate()
+    migration_003 = importlib.import_module("ontology.migrations.003_processo_declarativo")
+    migration_003.migrate()
 
     driver = create_driver()
     rng = np.random.default_rng(SEED)
@@ -908,6 +910,13 @@ def seed() -> None:
 
             print("20. Ligando organizacao (centro de trabalho, planejamento)...")
             comum.ligar_organizacao(session)
+
+            print("21. Declarando o processo operacional (regime, estagios)...")
+            n_req = comum.enriquecer_processo(session, comum.PROCESSO_AGRO)
+            n_pre = comum.ligar_precedencia_processos(session)
+            n_ind = comum.medir_indicadores(session)
+            print(f"  {n_req} funcoes com ordem e criticidade, "
+                  f"{n_pre} precedencia(s), {n_ind} indicador(es) medido(s).")
 
         print("=== Seeder Agro concluido com sucesso ===")
     finally:

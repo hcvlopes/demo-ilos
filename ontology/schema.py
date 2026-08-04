@@ -112,6 +112,8 @@ RELATIONSHIP_TYPES: list[str] = [
     "VINCULADA",
     "REQUER",
     "MEDE",
+    # Delta 003 — cadeia entre processos operacionais.
+    "PRECEDE",
     # Delta 0.C — norma / requisito
     "TEM_REQUISITO",
     "REGULADO_POR",
@@ -195,6 +197,8 @@ RELATIONSHIP_SIGNATURES: list[tuple[str, str, str]] = [
     ("Entrega", "VINCULADA", "ProcessoOperacional"),
     ("ProcessoOperacional", "REQUER", "Funcao"),
     ("Indicador", "MEDE", "ProcessoOperacional"),
+    # Delta 003 — cadeia entre processos operacionais.
+    ("ProcessoOperacional", "PRECEDE", "ProcessoOperacional"),
     # Delta 0.C — norma / requisito
     ("Norma", "TEM_REQUISITO", "Requisito"),
     ("Equipamento", "REGULADO_POR", "Norma"),

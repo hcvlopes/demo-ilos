@@ -52,7 +52,7 @@ Total: **36**
 
 ## Tipos de aresta
 
-Total: **44**
+Total: **45**
 
 | Tipo | Propriedades |
 |---|---|
@@ -94,6 +94,7 @@ Total: **44**
 | `VINCULADA` | — |
 | `REQUER` | — |
 | `MEDE` | — |
+| `PRECEDE` | — |
 | `TEM_REQUISITO` | — |
 | `REGULADO_POR` | — |
 | `TEM_METRICA` | — |
@@ -105,7 +106,7 @@ Total: **44**
 
 ## Assinaturas de aresta
 
-Total: **65**
+Total: **66**
 
 | Origem | Aresta | Destino |
 |---|---|---|
@@ -167,6 +168,7 @@ Total: **65**
 | `Entrega` | `VINCULADA` | `ProcessoOperacional` |
 | `ProcessoOperacional` | `REQUER` | `Funcao` |
 | `Indicador` | `MEDE` | `ProcessoOperacional` |
+| `ProcessoOperacional` | `PRECEDE` | `ProcessoOperacional` |
 | `Norma` | `TEM_REQUISITO` | `Requisito` |
 | `Equipamento` | `REGULADO_POR` | `Norma` |
 | `ClasseTaxonomia` | `REGULADO_POR` | `Norma` |
